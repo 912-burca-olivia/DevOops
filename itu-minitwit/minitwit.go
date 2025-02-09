@@ -37,9 +37,8 @@ func TimelineHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer db.Close()
-	session, _ := store.Get(r, "session-name")
-	session.Values["user"] = "Test"
-	session.Save(r,w)
+	//session, _ := store.Get(r, "session-name")
+
 	// Query the database for messages
 	rows, err := db.Query(`
 		SELECT message_id, author_id, text, pub_date, flagged
@@ -92,6 +91,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request){
 	// If user is already in the cookies, just redirect
 	if session.Values["user"] != nil {
 		http.Redirect(w,r,"/",http.StatusFound) // TODO: Change to correct redirect
+		return
 	}
 
 	var error string
@@ -108,15 +108,17 @@ func LoginHandler(w http.ResponseWriter, r *http.Request){
 			//http.Error(w, "Invalid password", http.StatusInternalServerError)
 		// Redirect and save user_id in cookies if the above checks failed
 		} else {
-			session.Values["user_id"] = user.UserID
+			fmt.Println("You logged in :)")
+			session.Values["user"] = user.UserID
 			session.Save(r,w)
 			http.Redirect(w,r,"/",http.StatusFound)
+			return
 		}
 	}
 	fmt.Fprintf(w,"This should be a Login page :), with the following error %s", error)
 }
 
-func RegisterHandle(w http.ResponseWriter, r *http.Request)  {
+func RegisterHandler(w http.ResponseWriter, r *http.Request)  {
 	session, _ := store.Get(r, "session-name")
 	db, err := connectDB()
 	if err != nil {
@@ -125,9 +127,13 @@ func RegisterHandle(w http.ResponseWriter, r *http.Request)  {
 	}
 	defer db.Close()
 	// If user already in cookies, redirect
-	if session.Values["user"] != nil {
+	if session.Values["user"] != nil{
+		fmt.Println(session.Values["user"])
+		fmt.Println("We went into the dark place")
 		http.Redirect(w,r,"/",http.StatusFound) // TODO: Change to correct redirect
+		return 
 	}
+
 	var error string
 	if r.Method == "POST" {
 		// If there is username in the form
@@ -165,12 +171,21 @@ func RegisterHandle(w http.ResponseWriter, r *http.Request)  {
 					log.Println(err)
 				}
 				fmt.Println(res.LastInsertId())
-				http.Redirect(w,r,"/login",http.StatusAccepted)
+				http.Redirect(w,r,"/login",http.StatusFound)
+				return
 			}
 		}
 	}
 	fmt.Fprintf(w, "This should be a register page with the following error: %s", error)
 
+}
+
+func LogoutHandler(w http.ResponseWriter, r *http.Request)  {
+	session, _ := store.Get(r, "session-name")
+	session.Options.MaxAge = -1
+	session.Save(r,w)
+	fmt.Println("You logged out")
+	http.Redirect(w,r,"/",http.StatusFound)
 }
 
 func main() {
@@ -180,7 +195,8 @@ func main() {
 	// Define the routes and their handlers
 	r.HandleFunc("/", TimelineHandler).Methods("GET")
 	r.HandleFunc("/login", LoginHandler).Methods("GET","POST")
-	r.HandleFunc("/register", RegisterHandle).Methods("GET","POST")
+	r.HandleFunc("/register", RegisterHandler).Methods("GET","POST")
+	r.HandleFunc("/logout", LogoutHandler).Methods("GET")
 	// Start the server on port 8080
 	fmt.Println("Server starting on http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", r))
