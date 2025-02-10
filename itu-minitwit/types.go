@@ -6,6 +6,7 @@ type Message struct {
 	Text      string `json:"text"`
 	PubDate   int    `json:"pub_date"`
 	Flagged   int    `json:"flagged"`
+	Username  string `json:"username"`
 }
 
 type User struct {
@@ -18,4 +19,9 @@ type User struct {
 type follower struct {
 	WhoID  int `json:"who_id"`
 	WhomID int `json:"whom_id"`
+}
+
+type TemplateMessage struct {
+	Message
+	Email string
 }
