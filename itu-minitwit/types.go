@@ -7,6 +7,7 @@ type Message struct {
 	PubDate   int    `json:"pub_date"`
 	Flagged   int    `json:"flagged"`
 	Username  string `json:"username"`
+	Email     string `json:"email"`
 }
 
 type User struct {

@@ -5,10 +5,10 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"strings"
-	"text/template"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -20,12 +20,21 @@ const DATABASE = "tmp/minitwit.db"
 const PER_PAGE = 10
 
 // Template cache
-var templates = template.Must(template.ParseGlob("templates/*.html"))
+//var templates = template.Must(template.ParseGlob("templates/*.html"))
+
+// var templates = template.Must(template.ParseFiles(
+
+// 	"templates/layout.html",
+// 	"templates/timeline.html",
+// 	"templates/login.html",
+// 	"templates/register.html",
+
+// ))
 var db *sql.DB
 var store = sessions.NewCookieStore([]byte("SESSION_KEY"))
 
 // Gravatar function that generates the Gravatar URL based on the email
-func gravatar_url(email string, size int) string {
+func gravatar(email string, size int) string {
 	// Clean up the email and hash it with MD5
 	email = strings.TrimSpace(email)
 	hash := md5.New()
@@ -37,15 +46,23 @@ func renderTemplate(w http.ResponseWriter, tmpl string, data interface{}, useGra
 	// Set up a FuncMap and conditionally add gravatar function if needed
 	// funcMap := template.FuncMap{}
 	// if useGravatar {
-	// 	funcMap["gravatar"] = gravatar_url
+	// 	funcMap["gravatar"] = gravatar
 	// }
 
-	err := templates.ExecuteTemplate(w, "layout", data)
+	// err := templates.ExecuteTemplate(w, tmpl, data)
+	// if err != nil {
+	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
+	// }
+
+	var t = template.Must(template.ParseFiles("templates/"+tmpl+".html", "templates/layout.html"))
+
+	err := t.ExecuteTemplate(w, "layout", data)
+
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-
 }
+
 func initDB() error {
 	var err error
 	db, err = sql.Open("sqlite3", DATABASE) // Change this if using MySQL/PostgreSQL
@@ -76,13 +93,13 @@ func TimelineHandler(w http.ResponseWriter, r *http.Request) {
 	// Check if user is logged in
 	userID, ok := session.Values["user_id"].(int)
 	if !ok {
-		http.Redirect(w, r, "/public", http.StatusFound)
+		http.Redirect(w, r, "/public_timeline", http.StatusFound)
 		return
 	}
 
 	// Query the database for messages
 	rows, err := db.Query(`
-		SELECT m.message_id, m.author_id, m.text, m.pub_date, m.flagged, u.username
+		SELECT m.message_id, m.author_id, m.text, m.pub_date, m.flagged, u.username, u.email
 		FROM message m, user u
 		WHERE m.flagged = 0 AND u.user_id = m.author_id
 		AND (m.author_id = ? OR m.author_id IN (
@@ -101,7 +118,7 @@ func TimelineHandler(w http.ResponseWriter, r *http.Request) {
 	// Loop through rows and scan into Message struct
 	for rows.Next() {
 		var msg Message
-		if err := rows.Scan(&msg.MessageID, &msg.AuthorID, &msg.Text, &msg.PubDate, &msg.Flagged); err != nil {
+		if err := rows.Scan(&msg.MessageID, &msg.AuthorID, &msg.Text, &msg.PubDate, &msg.Flagged, &msg.Username, &msg.Email); err != nil {
 			http.Error(w, "Error scanning rows", http.StatusInternalServerError)
 			return
 		}
@@ -116,7 +133,7 @@ func TimelineHandler(w http.ResponseWriter, r *http.Request) {
 func PublicTimelineHandler(w http.ResponseWriter, r *http.Request) {
 	// Query all public messages
 	query := `
-        SELECT m.message_id, m.author_id, m.text, m.pub_date, m.flagged, u.username
+        SELECT m.message_id, m.author_id, m.text, m.pub_date, m.flagged, u.username, u.email
         FROM message m, user u
         WHERE m.flagged = 0 AND m.author_id = u.user_id
         ORDER BY m.pub_date DESC LIMIT ?`
@@ -132,7 +149,7 @@ func PublicTimelineHandler(w http.ResponseWriter, r *http.Request) {
 	var messages []Message
 	for rows.Next() {
 		var msg Message
-		if err := rows.Scan(&msg.MessageID, &msg.AuthorID, &msg.Text, &msg.PubDate, &msg.Flagged, &msg.Username); err != nil {
+		if err := rows.Scan(&msg.MessageID, &msg.AuthorID, &msg.Text, &msg.PubDate, &msg.Flagged, &msg.Username, &msg.Email); err != nil {
 			http.Error(w, "Error scanning rows", http.StatusInternalServerError)
 			return
 		}
@@ -140,7 +157,7 @@ func PublicTimelineHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Render template
-	renderTemplate(w, "timeline", map[string]interface{}{"messages": messages}, false)
+	renderTemplate(w, "timeline", map[string]interface{}{"messages": messages}, true)
 }
 
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
@@ -286,7 +303,7 @@ func main() {
 
 	// Define the routes and their handlers
 	r.HandleFunc("/", TimelineHandler).Methods("GET")
-	r.HandleFunc("/public", PublicTimelineHandler).Methods("GET")
+	r.HandleFunc("/public_timeline", PublicTimelineHandler).Methods("GET")
 	r.HandleFunc("/login", LoginHandler).Methods("GET", "POST")
 	r.HandleFunc("/register", RegisterHandle).Methods("GET", "POST")
 	r.HandleFunc("/add_message", AddMessageHandler).Methods("POST")
