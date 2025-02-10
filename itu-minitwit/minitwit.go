@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/gorilla/mux"
@@ -12,20 +13,58 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const DATABASE = "tmp/minitwit.db"
+const DATABASE = "minitwit.db"
 const PER_PAGE = 10
 
 
 var store = sessions.NewCookieStore([]byte("SESSION_KEY"))
 
-// Connect to the SQLite database
+
+// connectDB opens a connection to the SQLite3 database
 func connectDB() (*sql.DB, error) {
-	db, err := sql.Open("sqlite3", DATABASE)
-	if err != nil {
-		return nil, fmt.Errorf("could not connect to the database: %v", err)
-	}
-	return db, nil
+	return sql.Open("sqlite3", DATABASE)
 }
+
+// initDB initializes the database using schema.sql
+func initDB() {
+	// Open database connection
+	db, err := connectDB()
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer db.Close()
+
+	// Check if the database file exists
+	if fileExists(DATABASE) {
+		fmt.Println("Database already exists. Skipping schema execution.")
+		return
+	}
+
+	// Read the schema.sql file
+	schemaFile := "schema.sql"
+	schema, err := os.ReadFile(schemaFile)
+	if err != nil {
+		log.Fatalf("Failed to read %s: %v", schemaFile, err)
+	}
+
+	// Execute schema script
+	_, err = db.Exec(string(schema))
+	if err != nil {
+		log.Fatalf("Failed to execute schema from %s: %v", schemaFile, err)
+	}
+
+	fmt.Println("Database initialized successfully using", schemaFile)
+}
+
+
+// // Connect to the SQLite database
+// func connectDB() (*sql.DB, error) {
+// 	db, err := sql.Open("sqlite3", DATABASE)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("could not connect to the database: %v", err)
+// 	}
+// 	return db, nil
+// }
 
 
 // Fetch the TimelineHandler messages
@@ -155,6 +194,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request)  {
 				userId, err := getUserID(db,r.FormValue("username"))
 				if err != nil {
 					log.Println("Error retrieving user ID:", err)
+					return
 				}
 			// If the username is already taken
 			if userId != -1 {
@@ -190,8 +230,9 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request)  {
 
 func main() {
 	// Create a new mux router
+	initDB()
+	
 	r := mux.NewRouter()
-
 	// Define the routes and their handlers
 	r.HandleFunc("/", TimelineHandler).Methods("GET")
 	r.HandleFunc("/login", LoginHandler).Methods("GET","POST")
