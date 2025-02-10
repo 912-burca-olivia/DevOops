@@ -96,6 +96,15 @@ func TimelineHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Query the database for user details
+	var user User
+	err := db.QueryRow(`SELECT user_id, username, email FROM user WHERE user_id = ?`, userID).
+		Scan(&user.UserID, &user.Username, &user.Email)
+	if err != nil {
+		http.Error(w, "Failed to fetch user details", http.StatusInternalServerError)
+		return
+	}
+
 	// Query the database for messages
 	rows, err := db.Query(`
 		SELECT m.message_id, m.author_id, m.text, m.pub_date, m.flagged, u.username, u.email
@@ -125,7 +134,11 @@ func TimelineHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Render template
-	renderTemplate(w, "timeline", map[string]interface{}{"messages": messages}, false)
+	renderTemplate(w, "timeline", map[string]interface{}{
+		"User":     user,
+		"messages": messages,
+		"Endpoint": "timeline",
+	}, false)
 
 }
 
@@ -204,7 +217,7 @@ func RegisterHandle(w http.ResponseWriter, r *http.Request) {
 
 	// If user already in cookies, redirect
 	if session.Values["user_id"] != nil {
-		fmt.Println(session.Values["user"])
+		fmt.Println(session.Values["user_id"])
 		fmt.Println("We went into the dark place")
 		http.Redirect(w, r, "/", http.StatusFound) // TODO: Change to correct redirect
 		return
