@@ -15,7 +15,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const DATABASE = "tmp/minitwit.db"
+const DATABASE = "minitwit.db"
 const PER_PAGE = 10
 
 // Template cache
@@ -165,6 +165,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	// If user is already in the cookies, just redirect
 	if session.Values["user_id"] != nil {
 		http.Redirect(w, r, "/", http.StatusFound) // TODO: Change to correct redirect
+		return
 	}
 
 	var error string
@@ -188,9 +189,11 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 			// Redirect and save user_id in cookies if the above checks failed
 		} else {
+			fmt.Println("You logged in :)")
 			session.Values["user_id"] = user.UserID
 			session.Save(r, w)
 			http.Redirect(w, r, "/", http.StatusFound)
+			return
 		}
 	}
 	renderTemplate(w, "login", nil, false)
@@ -201,8 +204,12 @@ func RegisterHandle(w http.ResponseWriter, r *http.Request) {
 
 	// If user already in cookies, redirect
 	if session.Values["user_id"] != nil {
+		fmt.Println(session.Values["user"])
+		fmt.Println("We went into the dark place")
 		http.Redirect(w, r, "/", http.StatusFound) // TODO: Change to correct redirect
+		return
 	}
+
 	var error string
 
 	if r.Method == "POST" {
@@ -225,6 +232,7 @@ func RegisterHandle(w http.ResponseWriter, r *http.Request) {
 			userId, err := getUserID(db, r.FormValue("username"))
 			if err != nil {
 				log.Println("Error retrieving user ID:", err)
+				return
 			}
 			// If the username is already taken
 			if userId != -1 {
@@ -241,7 +249,8 @@ func RegisterHandle(w http.ResponseWriter, r *http.Request) {
 					log.Println(err)
 				}
 				fmt.Println(res.LastInsertId())
-				http.Redirect(w, r, "/login", http.StatusAccepted)
+				http.Redirect(w, r, "/login", http.StatusFound)
+				return
 			}
 		}
 	}
@@ -254,8 +263,18 @@ func RegisterHandle(w http.ResponseWriter, r *http.Request) {
 	renderTemplate(w, "register", data, false)
 }
 
+func LogoutHandler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "session-name")
+	session.Options.MaxAge = -1
+	session.Save(r, w)
+	fmt.Println("You logged out")
+	http.Redirect(w, r, "/", http.StatusFound)
+}
+
 func main() {
 	// Create a new mux router
+	initDB()
+
 	r := mux.NewRouter()
 
 	// Initialize DB
