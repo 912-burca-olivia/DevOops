@@ -18,17 +18,6 @@ import (
 const DATABASE = "minitwit.db"
 const PER_PAGE = 10
 
-// Template cache
-//var templates = template.Must(template.ParseGlob("templates/*.html"))
-
-// var templates = template.Must(template.ParseFiles(
-
-// 	"templates/layout.html",
-// 	"templates/timeline.html",
-// 	"templates/login.html",
-// 	"templates/register.html",
-
-// ))
 var db *sql.DB
 var store = sessions.NewCookieStore([]byte("SESSION_KEY"))
 
