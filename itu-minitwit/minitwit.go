@@ -248,7 +248,7 @@ func main() {
 	defer closeDB() // Ensure DB is closed when the app exits
 
 	// Serve static files (e.g., CSS, images, etc.) from the "static" folder
-	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 
 	// Define the routes and their handlers
 	r.HandleFunc("/", TimelineHandler).Methods("GET")
