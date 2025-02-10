@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/gorilla/mux"
@@ -25,36 +24,7 @@ func connectDB() (*sql.DB, error) {
 	return sql.Open("sqlite3", DATABASE)
 }
 
-// initDB initializes the database using schema.sql
-func initDB() {
-	// Open database connection
-	db, err := connectDB()
-	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
 
-	// Check if the database file exists
-	if fileExists(DATABASE) {
-		fmt.Println("Database already exists. Skipping schema execution.")
-		return
-	}
-
-	// Read the schema.sql file
-	schemaFile := "schema.sql"
-	schema, err := os.ReadFile(schemaFile)
-	if err != nil {
-		log.Fatalf("Failed to read %s: %v", schemaFile, err)
-	}
-
-	// Execute schema script
-	_, err = db.Exec(string(schema))
-	if err != nil {
-		log.Fatalf("Failed to execute schema from %s: %v", schemaFile, err)
-	}
-
-	fmt.Println("Database initialized successfully using", schemaFile)
-}
 
 
 // // Connect to the SQLite database
@@ -228,6 +198,36 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request)  {
 	http.Redirect(w,r,"/",http.StatusFound)
 }
 
+func FollowHandler(w http.ResponseWriter, r *http.Request)  {
+	session, _ := store.Get(r, "session-name")
+	db, err := connectDB()
+	vars := mux.Vars(r)
+	if err != nil {
+		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+	if session.Values["user"] == nil {
+		http.Error(w, "User not logged in", http.StatusUnauthorized)
+		return
+	}
+	whom_id,err := getUserID(db,vars["username"])
+	if err != nil{
+		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+		return
+	}
+	if whom_id == -1 {
+		http.Error(w, "User does not exist",http.StatusNotFound)
+		return
+	}
+	db.Exec("insert into follower (who_id, whom_id) values (?, ?)",
+		session.Values["user"], 
+		whom_id)
+	session.AddFlash("You are now following " + vars["username"]) // TODO: Don't know if working
+	session.Save(r,w)
+	http.Redirect(w,r,"/",http.StatusAccepted) // TODO: Add the correct redirect to the user timeline
+}
+
 func main() {
 	// Create a new mux router
 	initDB()
@@ -238,6 +238,7 @@ func main() {
 	r.HandleFunc("/login", LoginHandler).Methods("GET","POST")
 	r.HandleFunc("/register", RegisterHandler).Methods("GET","POST")
 	r.HandleFunc("/logout", LogoutHandler).Methods("GET")
+	r.HandleFunc("/{username}/follow",FollowHandler).Methods("GET")
 	// Start the server on port 8080
 	fmt.Println("Server starting on http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", r))
