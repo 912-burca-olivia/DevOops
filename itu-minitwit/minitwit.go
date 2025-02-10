@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
@@ -35,11 +36,6 @@ func renderTemplate(w http.ResponseWriter, tmpl string, data interface{}, useGra
 	// funcMap := template.FuncMap{}
 	// if useGravatar {
 	// 	funcMap["gravatar"] = gravatar
-	// }
-
-	// err := templates.ExecuteTemplate(w, tmpl, data)
-	// if err != nil {
-	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
 	// }
 
 	var t = template.Must(template.ParseFiles("templates/"+tmpl+".html", "templates/layout.html"))
@@ -273,6 +269,39 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
+func AddMessageHandler(w http.ResponseWriter, r *http.Request) {
+	// Get the current session
+	session, _ := store.Get(r, "session-name")
+
+	// Check if the user is logged in
+	userID, ok := session.Values["user_id"].(int)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Check if the message text is provided
+	messageText := r.FormValue("text")
+	if messageText == "" {
+		http.Error(w, "Message cannot be empty", http.StatusBadRequest)
+		return
+	}
+
+	// Get current timestamp
+	pubDate := int(time.Now().Unix())
+
+	// Insert the message into the database
+	_, err := db.Exec(`INSERT INTO message (author_id, text, pub_date, flagged)
+	                     VALUES (?, ?, ?, 0)`, userID, messageText, pubDate)
+	if err != nil {
+		http.Error(w, "Failed to save message", http.StatusInternalServerError)
+		return
+	}
+
+	// Flash message (you can implement this with a session or redirect with a query parameter)
+	http.Redirect(w, r, "/", http.StatusFound)
+}
+
 func main() {
 	// Create a new mux router
 	initDB()
@@ -293,6 +322,8 @@ func main() {
 	r.HandleFunc("/public_timeline", PublicTimelineHandler).Methods("GET")
 	r.HandleFunc("/login", LoginHandler).Methods("GET", "POST")
 	r.HandleFunc("/register", RegisterHandle).Methods("GET", "POST")
+	r.HandleFunc("/add_message", AddMessageHandler).Methods("POST")
+	r.HandleFunc("/logout", LogoutHandler)
 	// Start the server on port 8080
 	fmt.Println("Server starting on http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", r))
