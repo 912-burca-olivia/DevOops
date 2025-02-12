@@ -432,14 +432,7 @@ func UserTimelineHandler(w http.ResponseWriter, r *http.Request) {
 		messages = append(messages, msg)
 	}
 
-	// TODO: Render template
-	// Fix types for message parameter to include email and username
-	for _, msg := range messages {
-
-		fmt.Fprintf(w, "Message ID: %d, Author ID: %d, Text: %s, Pub Date: %d, Flagged: %d\n",
-			msg.MessageID, msg.AuthorID, msg.Text, msg.PubDate, msg.Flagged)
-	}
-
+	renderTemplate(w, "timeline", map[string]interface{}{"messages": messages}, true)
 }
 
 func main() {
@@ -466,7 +459,7 @@ func main() {
 	r.HandleFunc("/logout", LogoutHandler).Methods("GET")
 	r.HandleFunc("/{username}/follow", FollowHandler).Methods("GET")
 	r.HandleFunc("/{username}/unfollow", UnfollowHandler).Methods("GET")
-	r.HandleFunc("/{username}", UserTimelineHandler).Methods("GET")
+	r.HandleFunc("/user_timeline/{username}", UserTimelineHandler).Methods("GET")
 
 	// Start the server on port 8080
 	fmt.Println("Server starting on http://localhost:8080")
