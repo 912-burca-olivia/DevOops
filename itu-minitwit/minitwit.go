@@ -159,7 +159,10 @@ func PublicTimelineHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Render template
-	renderTemplate(w, "timeline", map[string]interface{}{"messages": messages}, true)
+	renderTemplate(w, "timeline", map[string]interface{}{
+		"messages": messages,
+		"Endpoint": "public_timeline",
+	}, true)
 }
 
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
@@ -316,7 +319,7 @@ func FollowHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer db.Close()
-	if session.Values["user"] == nil {
+	if session.Values["user_id"] == nil {
 		http.Error(w, "User not logged in", http.StatusUnauthorized)
 		return
 	}
@@ -330,11 +333,12 @@ func FollowHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	db.Exec("insert into follower (who_id, whom_id) values (?, ?)",
-		session.Values["user"],
+		session.Values["user_id"],
 		whom_id)
 	session.AddFlash("You are now following " + vars["username"]) // TODO: Don't know if working
 	session.Save(r, w)
-	http.Redirect(w, r, "/", http.StatusAccepted) // TODO: Add the correct redirect to the user timeline
+	http.Redirect(w, r, fmt.Sprintf("/user_timeline/%s", vars["username"]), http.StatusFound)
+
 }
 
 func UnfollowHandler(w http.ResponseWriter, r *http.Request) {
@@ -346,7 +350,7 @@ func UnfollowHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer db.Close()
-	if session.Values["user"] == nil {
+	if session.Values["user_id"] == nil {
 		http.Error(w, "User not logged in", http.StatusUnauthorized)
 		return
 	}
@@ -360,11 +364,11 @@ func UnfollowHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	db.Exec("delete from follower where who_id=? and whom_id=?",
-		session.Values["user"],
+		session.Values["user_id"],
 		whom_id)
 	session.AddFlash("You are no longer following" + vars["username"]) // TODO: Don't know if working
 	session.Save(r, w)
-	http.Redirect(w, r, "/", http.StatusAccepted) // TODO: Add the correct redirect to the user timeline
+	http.Redirect(w, r, fmt.Sprintf("/user_timeline/%s", vars["username"]), http.StatusFound)
 }
 
 func UserTimelineHandler(w http.ResponseWriter, r *http.Request) {
@@ -376,6 +380,22 @@ func UserTimelineHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer db.Close()
+
+	userID, ok := session.Values["user_id"].(int)
+	if !ok {
+		http.Redirect(w, r, "/public_timeline", http.StatusFound)
+		return
+	}
+
+	// Query the database for user details
+	var user User
+	err = db.QueryRow(`SELECT user_id, username, email FROM user WHERE user_id = ?`, userID).
+		Scan(&user.UserID, &user.Username, &user.Email)
+	if err != nil {
+		http.Error(w, "Failed to fetch user details", http.StatusInternalServerError)
+		return
+	}
+
 	var profile_user User
 	err = db.QueryRow("select * from user where username = ?", vars["username"]).Scan(&profile_user.UserID, &profile_user.Username, &profile_user.Email, &profile_user.PWHash)
 	if err != nil {
@@ -384,14 +404,14 @@ func UserTimelineHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		http.Error(w, "Database connection failed", http.StatusInternalServerError)
 	}
-	var followed int
-	if session.Values["user"] != nil {
+	var followed bool
+	if session.Values["user_id"] != nil {
 		//var isFollowed int
 		err = db.QueryRow(
 			`select 1 
 			from follower 
 			where follower.who_id = ? and follower.whom_id = ?`,
-			session.Values["user"],
+			session.Values["user_id"],
 			profile_user.UserID).
 			Scan(&followed)
 		if err != nil {
@@ -432,7 +452,17 @@ func UserTimelineHandler(w http.ResponseWriter, r *http.Request) {
 		messages = append(messages, msg)
 	}
 
-	renderTemplate(w, "timeline", map[string]interface{}{"messages": messages}, true)
+	flashes := session.Flashes() // Get flash messages
+	session.Save(r, w)           // Clear them after retrieval
+
+	renderTemplate(w, "timeline", map[string]interface{}{
+		"User":        user,
+		"ProfileUser": profile_user,
+		"Followed":    followed,
+		"messages":    messages,
+		"Endpoint":    "user_timeline",
+		"Flashes":     flashes,
+	}, true)
 }
 
 func main() {
