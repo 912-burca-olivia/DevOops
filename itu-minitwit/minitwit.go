@@ -47,6 +47,11 @@ func renderTemplate(w http.ResponseWriter, tmpl string, data interface{}, useGra
 	}
 }
 
+// connectDB opens a connection to the SQLite3 database
+func connectDB() (*sql.DB, error) {
+	return sql.Open("sqlite3", DATABASE)
+}
+
 func initDB() error {
 	var err error
 	db, err = sql.Open("sqlite3", DATABASE) // Change this if using MySQL/PostgreSQL
@@ -302,6 +307,66 @@ func AddMessageHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
+func FollowHandler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "session-name")
+	db, err := connectDB()
+	vars := mux.Vars(r)
+	if err != nil {
+		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+	if session.Values["user"] == nil {
+		http.Error(w, "User not logged in", http.StatusUnauthorized)
+		return
+	}
+	whom_id, err := getUserID(db, vars["username"])
+	if err != nil {
+		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+		return
+	}
+	if whom_id == -1 {
+		http.Error(w, "User does not exist", http.StatusNotFound)
+		return
+	}
+	db.Exec("insert into follower (who_id, whom_id) values (?, ?)",
+		session.Values["user"],
+		whom_id)
+	session.AddFlash("You are now following " + vars["username"]) // TODO: Don't know if working
+	session.Save(r, w)
+	http.Redirect(w, r, "/", http.StatusAccepted) // TODO: Add the correct redirect to the user timeline
+}
+
+func UnfollowHandler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "session-name")
+	db, err := connectDB()
+	vars := mux.Vars(r)
+	if err != nil {
+		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+	if session.Values["user"] == nil {
+		http.Error(w, "User not logged in", http.StatusUnauthorized)
+		return
+	}
+	whom_id, err := getUserID(db, vars["username"])
+	if err != nil {
+		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+		return
+	}
+	if whom_id == -1 {
+		http.Error(w, "User does not exist", http.StatusNotFound)
+		return
+	}
+	db.Exec("delete from follower where who_id=? and whom_id=?",
+		session.Values["user"],
+		whom_id)
+	session.AddFlash("You are no longer following" + vars["username"]) // TODO: Don't know if working
+	session.Save(r, w)
+	http.Redirect(w, r, "/", http.StatusAccepted) // TODO: Add the correct redirect to the user timeline
+}
+
 func main() {
 	// Create a new mux router
 	initDB()
@@ -323,7 +388,10 @@ func main() {
 	r.HandleFunc("/login", LoginHandler).Methods("GET", "POST")
 	r.HandleFunc("/register", RegisterHandle).Methods("GET", "POST")
 	r.HandleFunc("/add_message", AddMessageHandler).Methods("POST")
-	r.HandleFunc("/logout", LogoutHandler)
+	r.HandleFunc("/logout", LogoutHandler).Methods("GET")
+	r.HandleFunc("/{username}/follow", FollowHandler).Methods("GET")
+	r.HandleFunc("/{username}/unfollow", UnfollowHandler).Methods("GET")
+
 	// Start the server on port 8080
 	fmt.Println("Server starting on http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", r))
