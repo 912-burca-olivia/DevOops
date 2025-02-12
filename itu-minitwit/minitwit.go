@@ -123,16 +123,22 @@ func TimelineHandler(w http.ResponseWriter, r *http.Request) {
 		messages = append(messages, msg)
 	}
 
+	flashes := session.Flashes() // Get flash messages
+	session.Save(r, w)
+
 	// Render template
 	renderTemplate(w, "timeline", map[string]interface{}{
 		"User":     user,
 		"messages": messages,
+		"Flashes":  flashes,
 		"Endpoint": "timeline",
 	}, false)
 
 }
 
 func PublicTimelineHandler(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "session-name")
+
 	// Query all public messages
 	query := `
         SELECT m.message_id, m.author_id, m.text, m.pub_date, m.flagged, u.username, u.email
@@ -158,9 +164,13 @@ func PublicTimelineHandler(w http.ResponseWriter, r *http.Request) {
 		messages = append(messages, msg)
 	}
 
+	flashes := session.Flashes() // Get flash messages
+	session.Save(r, w)           // Clear them after retrieval
+
 	// Render template
 	renderTemplate(w, "timeline", map[string]interface{}{
 		"messages": messages,
+		"Flashes":  flashes,
 		"Endpoint": "public_timeline",
 	}, true)
 }
@@ -195,14 +205,19 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 			// Redirect and save user_id in cookies if the above checks failed
 		} else {
-			fmt.Println("You logged in :)")
+			session.AddFlash("You were logged in")
 			session.Values["user_id"] = user.UserID
 			session.Save(r, w)
 			http.Redirect(w, r, "/", http.StatusFound)
 			return
 		}
 	}
-	renderTemplate(w, "login", nil, false)
+	flashes := session.Flashes()
+	session.Save(r, w)
+
+	renderTemplate(w, "login", map[string]interface{}{
+		"Flashes": flashes,
+	}, false)
 }
 
 func RegisterHandle(w http.ResponseWriter, r *http.Request) {
@@ -255,6 +270,8 @@ func RegisterHandle(w http.ResponseWriter, r *http.Request) {
 					log.Println(err)
 				}
 				fmt.Println(res.LastInsertId())
+				session.AddFlash("You were successfully registered and can login now")
+				session.Save(r, w)
 				http.Redirect(w, r, "/login", http.StatusFound)
 				return
 			}
@@ -271,9 +288,9 @@ func RegisterHandle(w http.ResponseWriter, r *http.Request) {
 
 func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "session-name")
-	session.Options.MaxAge = -1
+	delete(session.Values, "user_id")
+	session.AddFlash("You were logged out")
 	session.Save(r, w)
-	fmt.Println("You logged out")
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
@@ -306,7 +323,8 @@ func AddMessageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Flash message (you can implement this with a session or redirect with a query parameter)
+	session.AddFlash("Your message was recorded")
+	session.Save(r, w)
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
