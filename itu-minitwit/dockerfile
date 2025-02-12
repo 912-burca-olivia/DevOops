@@ -25,3 +25,6 @@ RUN CGO_ENABLED=1 GOOS=linux go build -o /docker-minitwit
 
 # Run
 CMD ["/docker-minitwit"]
+
+# Use 'docker build --tag minitwit .' to build the image
+# Use 'docker run --publish 8080:8080 minitwit' to run the container

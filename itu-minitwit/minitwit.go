@@ -367,6 +367,81 @@ func UnfollowHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusAccepted) // TODO: Add the correct redirect to the user timeline
 }
 
+func UserTimelineHandler(w http.ResponseWriter, r *http.Request) {
+	db, err := connectDB()
+	session, _ := store.Get(r, "session-name")
+	vars := mux.Vars(r)
+	if err != nil {
+		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+	var profile_user User
+	err = db.QueryRow("select * from user where username = ?", vars["username"]).Scan(&profile_user.UserID, &profile_user.Username, &profile_user.Email, &profile_user.PWHash)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "User not found", http.StatusNotFound)
+		}
+		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+	}
+	var followed int
+	if session.Values["user"] != nil {
+		//var isFollowed int
+		err = db.QueryRow(
+			`select 1 
+			from follower 
+			where follower.who_id = ? and follower.whom_id = ?`,
+			session.Values["user"],
+			profile_user.UserID).
+			Scan(&followed)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				fmt.Println("User is not following") // Return -1 if no user is found
+			} else {
+				http.Error(w, "Database connection failed", http.StatusInternalServerError)
+			}
+		}
+	}
+
+	fmt.Println("We have reached")
+	// Query the database for messages
+	// Removed user.* from Select
+	rows, err := db.Query(`
+	SELECT message.*
+	FROM message, user
+	WHERE user.user_id = message.author_id and user.user_id = ?
+	ORDER BY message.pub_date DESC
+	LIMIT ?`, profile_user.UserID, PER_PAGE)
+	if err != nil {
+		http.Error(w, "Query execution failed", http.StatusInternalServerError)
+		return
+	}
+
+	defer rows.Close()
+
+	// Slice to hold the messages
+	var messages []Message
+
+	// Loop through rows and scan into Message struct
+	for rows.Next() {
+		var msg Message
+		if err := rows.Scan(&msg.MessageID, &msg.AuthorID, &msg.Text, &msg.PubDate, &msg.Flagged); err != nil {
+			http.Error(w, "Error scanning rows", http.StatusInternalServerError)
+			return
+		}
+		messages = append(messages, msg)
+	}
+
+	// TODO: Render template
+	// Fix types for message parameter to include email and username
+	for _, msg := range messages {
+
+		fmt.Fprintf(w, "Message ID: %d, Author ID: %d, Text: %s, Pub Date: %d, Flagged: %d\n",
+			msg.MessageID, msg.AuthorID, msg.Text, msg.PubDate, msg.Flagged)
+	}
+
+}
+
 func main() {
 	// Create a new mux router
 	initDB()
@@ -391,6 +466,7 @@ func main() {
 	r.HandleFunc("/logout", LogoutHandler).Methods("GET")
 	r.HandleFunc("/{username}/follow", FollowHandler).Methods("GET")
 	r.HandleFunc("/{username}/unfollow", UnfollowHandler).Methods("GET")
+	r.HandleFunc("/{username}", UserTimelineHandler).Methods("GET")
 
 	// Start the server on port 8080
 	fmt.Println("Server starting on http://localhost:8080")
