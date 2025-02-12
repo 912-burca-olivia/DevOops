@@ -2,7 +2,9 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
+	"os"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -40,40 +42,40 @@ func getUserID(db *sql.DB, username string) (int, error) {
 }
 
 // initDB initializes the database using schema.sql
-// func initDB() {
-// 	// Open database connection
-// 	db, err := connectDB()
-// 	if err != nil {
-// 		log.Fatalf("Failed to connect to database: %v", err)
-// 	}
-// 	defer db.Close()
+func initDB() {
+	// Open database connection
+	db, err := connectDB()
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer db.Close()
 
-// 	// Check if the database file exists
-// 	if fileExists(DATABASE) {
-// 		fmt.Println("Database already exists. Skipping schema execution.")
-// 		return
-// 	}
+	// Check if the database file exists
+	if fileExists(DATABASE) {
+		fmt.Println("Database already exists. Skipping schema execution.")
+		return
+	}
 
-// 	// Read the schema.sql file
-// 	schemaFile := "schema.sql"
-// 	schema, err := os.ReadFile(schemaFile)
-// 	if err != nil {
-// 		log.Fatalf("Failed to read %s: %v", schemaFile, err)
-// 	}
+	// Read the schema.sql file
+	schemaFile := "schema.sql"
+	schema, err := os.ReadFile(schemaFile)
+	if err != nil {
+		log.Fatalf("Failed to read %s: %v", schemaFile, err)
+	}
 
-// 	// Execute schema script
-// 	_, err = db.Exec(string(schema))
-// 	if err != nil {
-// 		log.Fatalf("Failed to execute schema from %s: %v", schemaFile, err)
-// 	}
+	// Execute schema script
+	_, err = db.Exec(string(schema))
+	if err != nil {
+		log.Fatalf("Failed to execute schema from %s: %v", schemaFile, err)
+	}
 
-// 	fmt.Println("Database initialized successfully using", schemaFile)
-// }
+	fmt.Println("Database initialized successfully using", schemaFile)
+}
 
-// func fileExists(filename string) bool {
-// 	info, err := os.Stat(filename)
-// 	if os.IsNotExist(err) {
-// 		return false
-// 	}
-// 	return !info.IsDir()
-// }
+func fileExists(filename string) bool {
+	info, err := os.Stat(filename)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return !info.IsDir()
+}

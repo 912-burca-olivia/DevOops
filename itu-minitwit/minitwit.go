@@ -52,33 +52,20 @@ func connectDB() (*sql.DB, error) {
 	return sql.Open("sqlite3", DATABASE)
 }
 
-func initDB() error {
-	var err error
-	db, err = sql.Open("sqlite3", DATABASE) // Change this if using MySQL/PostgreSQL
-	if err != nil {
-		return fmt.Errorf("failed to connect to database: %w", err)
-	}
-	// Verify connection
-	if err = db.Ping(); err != nil {
-		return fmt.Errorf("failed to ping database: %w", err)
-	}
-	log.Println("Database connected successfully")
-	return nil
-}
-
-// Close the database connection on shutdown
-func closeDB() {
-	if db != nil {
-		db.Close()
-		log.Println("Database connection closed")
-	}
-}
-
 // Fetch the TimelineHandler messages
 func TimelineHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("We got a visitor from:", r.RemoteAddr)
 
 	session, _ := store.Get(r, "session-name")
+
+	// Connect to the database
+	db, err := connectDB()
+	if err != nil {
+		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
 	// Check if user is logged in
 	userID, ok := session.Values["user_id"].(int)
 	if !ok {
@@ -88,7 +75,7 @@ func TimelineHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Query the database for user details
 	var user User
-	err := db.QueryRow(`SELECT user_id, username, email FROM user WHERE user_id = ?`, userID).
+	err = db.QueryRow(`SELECT user_id, username, email FROM user WHERE user_id = ?`, userID).
 		Scan(&user.UserID, &user.Username, &user.Email)
 	if err != nil {
 		http.Error(w, "Failed to fetch user details", http.StatusInternalServerError)
@@ -139,6 +126,14 @@ func TimelineHandler(w http.ResponseWriter, r *http.Request) {
 func PublicTimelineHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "session-name")
 
+	// Connect to the database
+	db, err := connectDB()
+	if err != nil {
+		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
 	// Query all public messages
 	query := `
         SELECT m.message_id, m.author_id, m.text, m.pub_date, m.flagged, u.username, u.email
@@ -178,9 +173,17 @@ func PublicTimelineHandler(w http.ResponseWriter, r *http.Request) {
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "session-name")
 
+	// Connect to the database
+	db, err := connectDB()
+	if err != nil {
+		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
 	// If user is already in the cookies, just redirect
 	if session.Values["user_id"] != nil {
-		http.Redirect(w, r, "/", http.StatusFound) // TODO: Change to correct redirect
+		http.Redirect(w, r, "/", http.StatusFound)
 		return
 	}
 
@@ -222,6 +225,14 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 func RegisterHandle(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "session-name")
+
+	// Connect to the database
+	db, err := connectDB()
+	if err != nil {
+		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
 
 	// If user already in cookies, redirect
 	if session.Values["user_id"] != nil {
@@ -298,6 +309,14 @@ func AddMessageHandler(w http.ResponseWriter, r *http.Request) {
 	// Get the current session
 	session, _ := store.Get(r, "session-name")
 
+	// Connect to the database
+	db, err := connectDB()
+	if err != nil {
+		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
 	// Check if the user is logged in
 	userID, ok := session.Values["user_id"].(int)
 	if !ok {
@@ -316,7 +335,7 @@ func AddMessageHandler(w http.ResponseWriter, r *http.Request) {
 	pubDate := int(time.Now().Unix())
 
 	// Insert the message into the database
-	_, err := db.Exec(`INSERT INTO message (author_id, text, pub_date, flagged)
+	_, err = db.Exec(`INSERT INTO message (author_id, text, pub_date, flagged)
 	                     VALUES (?, ?, ?, 0)`, userID, messageText, pubDate)
 	if err != nil {
 		http.Error(w, "Failed to save message", http.StatusInternalServerError)
@@ -488,12 +507,6 @@ func main() {
 	initDB()
 
 	r := mux.NewRouter()
-
-	// Initialize DB
-	if err := initDB(); err != nil {
-		log.Fatalf("Error initializing database: %v", err)
-	}
-	defer closeDB() // Ensure DB is closed when the app exits
 
 	// Serve static files (e.g., CSS, images, etc.) from the "static" folder
 	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
