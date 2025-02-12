@@ -35,13 +35,23 @@ func connectDB() (*sql.DB, error) {
 func TimelineHandler(w http.ResponseWriter, r *http.Request) {
 	// Connect to the database
 	db, err := connectDB()
+	session, _ := store.Get(r, "session-name")
 	if err != nil {
 		http.Error(w, "Database connection failed", http.StatusInternalServerError)
 		return
 	}
 	defer db.Close()
 	//session, _ := store.Get(r, "session-name")
-
+	// Retrieve flash messages
+	flashes := session.Flashes()
+	session.Save(r, w) // Clear flashes after retrieving
+	fmt.Fprintln(w,"Flashes should appear under here")
+	if len(flashes) > 0 {
+		for _, flash := range flashes {
+			fmt.Fprintf(w, "<p style='color: green;'>%s</p>", flash)
+		}
+	}
+	
 	// Query the database for messages
 	rows, err := db.Query(`
 		SELECT message_id, author_id, text, pub_date, flagged
@@ -91,6 +101,16 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer db.Close()
 
+	// Retrieve flash messages
+	flashes := session.Flashes()
+	session.Save(r, w) // Clear flashes after retrieving
+	fmt.Println("Under here should be flashes")
+	if len(flashes) > 0 {
+		for _, flash := range flashes {
+			fmt.Fprintf(w, "<p style='color: green;'>%s</p>", flash)
+		}
+	}
+	
 	// If user is already in the cookies, just redirect
 	if session.Values["user"] != nil {
 		http.Redirect(w, r, "/", http.StatusFound) // TODO: Change to correct redirect
@@ -131,8 +151,6 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	defer db.Close()
 	// If user already in cookies, redirect
 	if session.Values["user"] != nil {
-		fmt.Println(session.Values["user"])
-		fmt.Println("We went into the dark place")
 		http.Redirect(w, r, "/", http.StatusFound) // TODO: Change to correct redirect
 		return
 	}
@@ -165,7 +183,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 				error = "The username is already taken"
 				// If the form is correct
 			} else {
-				res, err := db.Exec("insert into user (	username, email, pw_hash) values (?, ?, ?)",
+				_, err := db.Exec("insert into user (	username, email, pw_hash) values (?, ?, ?)",
 					r.FormValue("username"),
 					r.FormValue("email"),
 					HashPassword(r.FormValue("password")),
@@ -174,7 +192,9 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 					fmt.Println("This is bad")
 					log.Println(err)
 				}
-				fmt.Println(res.LastInsertId())
+				session.AddFlash("You were successfully registered and can login now")
+				session.Save(r,w)
+
 				http.Redirect(w, r, "/login", http.StatusFound)
 				return
 			}
@@ -187,8 +207,9 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "session-name")
 	session.Options.MaxAge = -1
+	session, _ = store.New(r,"session-name")
+	session.AddFlash("You were logged out")
 	session.Save(r, w)
-	fmt.Println("You logged out")
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 

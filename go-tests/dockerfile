@@ -1,0 +1,15 @@
+# Use official Golang image
+FROM golang:1.23
+
+# Set the working directory inside the container
+WORKDIR /app
+
+# Copy Go module files first for dependency caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy the application files into the container
+COPY . .
+
+# Run tests
+CMD ["go", "test", "-v"]
