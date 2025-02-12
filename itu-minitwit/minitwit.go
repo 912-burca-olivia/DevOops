@@ -17,7 +17,7 @@ import (
 )
 
 const DATABASE = "minitwit.db"
-const PER_PAGE = 10
+const PER_PAGE = 30
 
 var db *sql.DB
 var store = sessions.NewCookieStore([]byte("SESSION_KEY"))
@@ -134,6 +134,18 @@ func PublicTimelineHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer db.Close()
 
+	userID, ok := session.Values["user_id"].(int)
+	var user User
+	if ok {
+		// Query the database for user details
+		err = db.QueryRow(`SELECT user_id, username, email FROM user WHERE user_id = ?`, userID).
+			Scan(&user.UserID, &user.Username, &user.Email)
+		if err != nil {
+			http.Error(w, "Failed to fetch user details", http.StatusInternalServerError)
+			return
+		}
+	}
+
 	// Query all public messages
 	query := `
         SELECT m.message_id, m.author_id, m.text, m.pub_date, m.flagged, u.username, u.email
@@ -162,12 +174,23 @@ func PublicTimelineHandler(w http.ResponseWriter, r *http.Request) {
 	flashes := session.Flashes() // Get flash messages
 	session.Save(r, w)           // Clear them after retrieval
 
-	// Render template
-	renderTemplate(w, "timeline", map[string]interface{}{
-		"messages": messages,
-		"Flashes":  flashes,
-		"Endpoint": "public_timeline",
-	}, true)
+	// Render template depending on whether the user is logged in or not
+
+	if !ok {
+		renderTemplate(w, "timeline", map[string]interface{}{
+			"messages": messages,
+			"Flashes":  flashes,
+			"Endpoint": "public_timeline",
+		}, true)
+	} else {
+		renderTemplate(w, "timeline", map[string]interface{}{
+			"messages": messages,
+			"Flashes":  flashes,
+			"User":     user,
+			"Endpoint": "public_timeline",
+		}, true)
+	}
+
 }
 
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
@@ -419,18 +442,15 @@ func UserTimelineHandler(w http.ResponseWriter, r *http.Request) {
 	defer db.Close()
 
 	userID, ok := session.Values["user_id"].(int)
-	if !ok {
-		http.Redirect(w, r, "/public_timeline", http.StatusFound)
-		return
-	}
-
-	// Query the database for user details
 	var user User
-	err = db.QueryRow(`SELECT user_id, username, email FROM user WHERE user_id = ?`, userID).
-		Scan(&user.UserID, &user.Username, &user.Email)
-	if err != nil {
-		http.Error(w, "Failed to fetch user details", http.StatusInternalServerError)
-		return
+	if ok {
+		// Query the database for user details
+		err = db.QueryRow(`SELECT user_id, username, email FROM user WHERE user_id = ?`, userID).
+			Scan(&user.UserID, &user.Username, &user.Email)
+		if err != nil {
+			http.Error(w, "Failed to fetch user details", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	var profile_user User
@@ -492,14 +512,26 @@ func UserTimelineHandler(w http.ResponseWriter, r *http.Request) {
 	flashes := session.Flashes() // Get flash messages
 	session.Save(r, w)           // Clear them after retrieval
 
-	renderTemplate(w, "timeline", map[string]interface{}{
-		"User":        user,
-		"ProfileUser": profile_user,
-		"Followed":    followed,
-		"messages":    messages,
-		"Endpoint":    "user_timeline",
-		"Flashes":     flashes,
-	}, true)
+	// render template based on whether user is logged in or not
+	if ok {
+		renderTemplate(w, "timeline", map[string]interface{}{
+			"User":        user,
+			"ProfileUser": profile_user,
+			"Followed":    followed,
+			"messages":    messages,
+			"Endpoint":    "user_timeline",
+			"Flashes":     flashes,
+		}, true)
+	} else {
+		renderTemplate(w, "timeline", map[string]interface{}{
+			"ProfileUser": profile_user,
+			"Followed":    followed,
+			"messages":    messages,
+			"Endpoint":    "user_timeline",
+			"Flashes":     flashes,
+		}, true)
+	}
+
 }
 
 func main() {
