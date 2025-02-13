@@ -15,7 +15,7 @@ import requests
 # import schema
 # import data
 # otherwise use the database that you got previously
-BASE_URL = "http://localhost:5000"
+BASE_URL = "http://localhost:8080"
 
 def register(username, password, password2=None, email=None):
     """Helper function to register a user"""
@@ -101,7 +101,7 @@ def test_timelines():
     logout(http_session)
     _, http_session = register_and_login('bar', 'default')
     add_message(http_session, 'the message by bar')
-    r = http_session.get(f'{BASE_URL}/public')
+    r = http_session.get(f'{BASE_URL}/public_timeline')
     assert 'the message by foo' in r.text
     assert 'the message by bar' in r.text
 
@@ -112,7 +112,7 @@ def test_timelines():
 
     # now let's follow foo
     r = http_session.get(f'{BASE_URL}/foo/follow', allow_redirects=True)
-    assert 'You are now following &#34;foo&#34;' in r.text
+    assert 'You are now following foo' in r.text
 
     # we should now see foo's message
     r = http_session.get(f'{BASE_URL}/')
@@ -120,16 +120,16 @@ def test_timelines():
     assert 'the message by bar' in r.text
 
     # but on the user's page we only want the user's message
-    r = http_session.get(f'{BASE_URL}/bar')
+    r = http_session.get(f'{BASE_URL}/user_timeline/bar')
     assert 'the message by foo' not in r.text
     assert 'the message by bar' in r.text
-    r = http_session.get(f'{BASE_URL}/foo')
+    r = http_session.get(f'{BASE_URL}/user_timeline/foo')
     assert 'the message by foo' in r.text
     assert 'the message by bar' not in r.text
 
     # now unfollow and check if that worked
     r = http_session.get(f'{BASE_URL}/foo/unfollow', allow_redirects=True)
-    assert 'You are no longer following &#34;foo&#34;' in r.text
+    assert 'You are no longer following foo' in r.text
     r = http_session.get(f'{BASE_URL}/')
     assert 'the message by foo' not in r.text
     assert 'the message by bar' in r.text

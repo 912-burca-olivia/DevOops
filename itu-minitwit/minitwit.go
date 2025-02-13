@@ -437,7 +437,7 @@ func UnfollowHandler(w http.ResponseWriter, r *http.Request) {
 	db.Exec("delete from follower where who_id=? and whom_id=?",
 		session.Values["user_id"],
 		whom_id)
-	session.AddFlash("You are no longer following" + vars["username"]) // TODO: Don't know if working
+	session.AddFlash("You are no longer following " + vars["username"]) // TODO: Don't know if working
 	session.Save(r, w)
 	http.Redirect(w, r, fmt.Sprintf("/user_timeline/%s", vars["username"]), http.StatusFound)
 }
@@ -549,6 +549,13 @@ func UserTimelineHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	// Create a new mux router
 	initDB()
+
+	store.Options = &sessions.Options{
+		Path:     "/",
+		MaxAge:   3600 * 16, // 16 hours
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+	}
 
 	r := mux.NewRouter()
 
