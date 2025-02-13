@@ -11,6 +11,7 @@ RUN go mod download && go mod verify
 COPY schema.sql ./
 # To get the html templates
 COPY templates/ ./templates/
+COPY static/ ./static/
 # Copy the source code. Note the slash at the end, as explained in
 # https://docs.docker.com/reference/dockerfile/#copy
 COPY *.go ./
