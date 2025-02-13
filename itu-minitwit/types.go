@@ -4,7 +4,7 @@ type Message struct {
 	MessageID int    `json:"message_id"`
 	AuthorID  int    `json:"author_id"`
 	Text      string `json:"text"`
-	PubDate   int    `json:"pub_date"`
+	PubDate   int64   `json:"pub_date"`
 	Flagged   int    `json:"flagged"`
 	Username  string `json:"username"`
 	Email     string `json:"email"`

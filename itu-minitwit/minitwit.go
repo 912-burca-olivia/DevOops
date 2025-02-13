@@ -23,7 +23,7 @@ var db *sql.DB
 var store = sessions.NewCookieStore([]byte("SESSION_KEY"))
 
 // Gravatar function that generates the Gravatar URL based on the email
-func gravatar(email string, size int) string {
+func Gravatar(size int, email string) string {
 	// Clean up the email and hash it with MD5
 	email = strings.TrimSpace(email)
 	hash := md5.New()
@@ -31,16 +31,27 @@ func gravatar(email string, size int) string {
 	return fmt.Sprintf("https://www.gravatar.com/avatar/%s?d=identicon&s=%d", hex.EncodeToString(hash.Sum(nil)), size)
 }
 
-func renderTemplate(w http.ResponseWriter, tmpl string, data interface{}, useGravatar bool) {
-	// Set up a FuncMap and conditionally add gravatar function if needed
-	// funcMap := template.FuncMap{}
-	// if useGravatar {
-	// 	funcMap["gravatar"] = gravatar
-	// }
 
-	var t = template.Must(template.ParseFiles("templates/"+tmpl+".html", "templates/layout.html"))
+func FormatDateTime(timestamp int64) string {
+	t := time.Unix(timestamp, 0)
+	return t.Format("Jan 2, 2006 at 3:04PM")
+}
 
-	err := t.ExecuteTemplate(w, "layout", data)
+func renderTemplate(w http.ResponseWriter, tmpl string, data interface{}) {
+
+	tmpls := template.New("").Funcs(template.FuncMap{
+		"FormatDateTime": FormatDateTime,
+		"Gravatar" : Gravatar,
+	})
+
+	tmpls, err := tmpls.ParseFiles("templates/"+tmpl+".html", "templates/layout.html")
+
+	if err != nil {
+		http.Error(w, "Error parsing templates", http.StatusInternalServerError)
+		return
+	}
+
+	err = tmpls.ExecuteTemplate(w, "layout", data)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -119,7 +130,7 @@ func TimelineHandler(w http.ResponseWriter, r *http.Request) {
 		"messages": messages,
 		"Flashes":  flashes,
 		"Endpoint": "timeline",
-	}, false)
+	})
 
 }
 
@@ -181,14 +192,14 @@ func PublicTimelineHandler(w http.ResponseWriter, r *http.Request) {
 			"messages": messages,
 			"Flashes":  flashes,
 			"Endpoint": "public_timeline",
-		}, true)
+		})
 	} else {
 		renderTemplate(w, "timeline", map[string]interface{}{
 			"messages": messages,
 			"Flashes":  flashes,
 			"User":     user,
 			"Endpoint": "public_timeline",
-		}, true)
+		})
 	}
 
 }
@@ -219,14 +230,14 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 			error = "Invalid username"
 			renderTemplate(w, "login", map[string]interface{}{
 				"Error": error,
-			}, false)
+			})
 			return
 			// Check if password is correct
 		} else if !CheckPasswordHash(r.FormValue("password"), user.PWHash) {
 			error = "Invalid password"
 			renderTemplate(w, "login", map[string]interface{}{
 				"Error": error,
-			}, false)
+			})
 			return
 
 			// Redirect and save user_id in cookies if the above checks failed
@@ -243,7 +254,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	renderTemplate(w, "login", map[string]interface{}{
 		"Flashes": flashes,
-	}, false)
+	})
 }
 
 func RegisterHandle(w http.ResponseWriter, r *http.Request) {
@@ -317,7 +328,7 @@ func RegisterHandle(w http.ResponseWriter, r *http.Request) {
 		"Username": r.FormValue("username"),
 		"Email":    r.FormValue("email"),
 	}
-	renderTemplate(w, "register", data, false)
+	renderTemplate(w, "register", data)
 }
 
 func LogoutHandler(w http.ResponseWriter, r *http.Request) {
@@ -484,7 +495,7 @@ func UserTimelineHandler(w http.ResponseWriter, r *http.Request) {
 	// Query the database for messages
 	// Removed user.* from Select
 	rows, err := db.Query(`
-	SELECT message.*
+	SELECT message.message_id, message.author_id, message.text, message.pub_date, message.flagged, user.username, user.email
 	FROM message, user
 	WHERE user.user_id = message.author_id and user.user_id = ?
 	ORDER BY message.pub_date DESC
@@ -502,7 +513,8 @@ func UserTimelineHandler(w http.ResponseWriter, r *http.Request) {
 	// Loop through rows and scan into Message struct
 	for rows.Next() {
 		var msg Message
-		if err := rows.Scan(&msg.MessageID, &msg.AuthorID, &msg.Text, &msg.PubDate, &msg.Flagged); err != nil {
+		
+		if err := rows.Scan(&msg.MessageID, &msg.AuthorID, &msg.Text, &msg.PubDate, &msg.Flagged, &msg.Username, &msg.Email); err != nil {
 			http.Error(w, "Error scanning rows", http.StatusInternalServerError)
 			return
 		}
@@ -521,7 +533,7 @@ func UserTimelineHandler(w http.ResponseWriter, r *http.Request) {
 			"messages":    messages,
 			"Endpoint":    "user_timeline",
 			"Flashes":     flashes,
-		}, true)
+		})
 	} else {
 		renderTemplate(w, "timeline", map[string]interface{}{
 			"ProfileUser": profile_user,
@@ -529,7 +541,7 @@ func UserTimelineHandler(w http.ResponseWriter, r *http.Request) {
 			"messages":    messages,
 			"Endpoint":    "user_timeline",
 			"Flashes":     flashes,
-		}, true)
+		})
 	}
 
 }
