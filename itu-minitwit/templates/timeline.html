@@ -1,10 +1,20 @@
-{{ define "title" }} {{ if eq .Endpoint "public_timeline" }} Public Timeline {{
-else if eq .Endpoint "user_timeline" }} {{ .ProfileUser.Username }}'s Timeline
-{{ else }} My Timeline {{ end }} {{ end }} {{ define "body" }}
+{{ define "title" }} 
+    {{ if eq .Endpoint "msgs" }} 
+        Public Timeline 
+    {{ else if eq .Endpoint "user_timeline"}} 
+        {{ .ProfileUser.Username }}'s Timeline
+    {{ else }} 
+        My Timeline 
+    {{ end }} 
+{{ end }}
+
+
+{{ define "body" }}
 <h2>{{ .Title }}</h2>
 
-{{ if .User }} {{ if eq .Endpoint "user_timeline" }}
-<div class="followstatus">
+{{ if .User }} 
+    {{ if and (ne .ProfileUser.Username .User.Username) (eq .Endpoint (printf "msgs/%s" .ProfileUser.Username)) }} <!-- dont understand why .ProfileUser.Username is not correctly found here-->
+    <div class="followstatus">
   {{ if eq .User.UserID .ProfileUser.UserID }} This is you! {{ else if .Followed
   }} You are currently following this user.
   <a class="unfollow" href="/{{ .ProfileUser.Username }}/unfollow"
@@ -13,22 +23,23 @@ else if eq .Endpoint "user_timeline" }} {{ .ProfileUser.Username }}'s Timeline
   <a class="follow" href="/{{ .ProfileUser.Username }}/follow">Follow user</a>.
   {{ end }}
 </div>
-{{ else if eq .Endpoint "timeline" }}
+{{ else if eq .Endpoint "msgs" }}
 <div class="twitbox">
-  <h3>What's on your mind {{ .User.Username }}?</h3>
-  <form action="/add_message" method="post">
+  <h3>What's on your mind {{ .Username }}?</h3>
+  <form action="/msgs/{{ .User.Username }}" method="post">
     <p><input type="text" name="text" size="60" /></p>
     <p><input type="submit" value="Share" /></p>
   </form>
 </div>
-{{ end }} {{ end }}
+{{ end }}
+{{ end }}
 
 <ul class="messages">
   {{ range .messages }}
-  <li> <img src="{{.Email | Gravatar 48}}">
+  <li> <img src="{{ .Email | Gravatar 48}}">
     <p>
         <strong
-          ><a href="/user_timeline/{{ .Username }}">{{ .Username }}</a></strong
+          ><a href="/msgs/{{ .Username }}">{{ .Username }}</a></strong
         >
         {{ .Text }}
         <small>&mdash; {{ .PubDate | FormatDateTime}}</small>

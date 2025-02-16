@@ -12,10 +12,11 @@
       <div class="navigation">
         {{ if .User }}
         <a href="/">my timeline</a> |
-        <a href="/public_timeline">public timeline</a> |
+        <a href="/msgs">public timeline</a> |
+        <a href="/fllws/{{ .User.Username }}">people I follow</a> |
         <a href="/logout">sign out [{{ .User.Username }}]</a>
         {{ else }}
-        <a href="/public_timeline">public timeline</a> |
+        <a href="/msgs">public timeline</a> |
         <a href="/register">sign up</a> |
         <a href="/login">sign in</a>
         {{ end }}
