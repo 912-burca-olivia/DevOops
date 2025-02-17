@@ -618,25 +618,25 @@ func FollowPageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func FollowHander(w http.ResponseWriter, r *http.Request) {
-	db, err := connectDB()
-	session, _ := store.Get(r, "session-name")
-	vars := mux.Vars(r)
-	if err != nil {
-		http.Error(w, "Database connection failed", http.StatusInternalServerError)
-		return
-	}
-	defer db.Close()
+	// func FollowHander(w http.ResponseWriter, r *http.Request) {
+	// 	db, err := connectDB()
+	// 	session, _ := store.Get(r, "session-name")
+	// 	vars := mux.Vars(r)
+	// 	if err != nil {
+	// 		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+	// 		return
+	// 	}
+	// 	defer db.Close()
 
-	userID, ok := session.Values["user_id"].(int)
-	var user User
+	// 	userID, ok := session.Values["user_id"].(int)
+	// 	var user User
 
-	//POST FOLLOW
-	query := `INSERT INTO follower (who_id, whom_id) VALUES (?, ?)`
+	// 	//POST FOLLOW
+	// 	query := `INSERT INTO follower (who_id, whom_id) VALUES (?, ?)`
 
-	//POST UNFOLLOW
-	query := `DELETE FROM follower WHERE who_id=? and WHOM_ID=?`
-}
+	// 	//POST UNFOLLOW
+	// 	query := `DELETE FROM follower WHERE who_id=? and WHOM_ID=?`
+	// }
 
 func main() {
 	// Create a new mux router
@@ -657,18 +657,18 @@ func main() {
 	// Define the routes and their handlers
 	r.HandleFunc("/latest", GetLatestHandler).Methods("GET")
 
-	r.HandleFunc("/", TimelineHandler).Methods("GET") // not sure if we should keep this one
-	r.HandleFunc("/msgs", PublicTimelineHandler).Methods("GET")
-	r.HandleFunc("/msgs/{username}", UserTimelineHandler).Methods("GET")
-	r.HandleFunc("/msgs/{username}", AddMessageHandler).Methods("POST")
+	// r.HandleFunc("/", TimelineHandler).Methods("GET") // not sure if we should keep this one
+	// r.HandleFunc("/msgs", PublicTimelineHandler).Methods("GET")
+	// r.HandleFunc("/msgs/{username}", UserTimelineHandler).Methods("GET")
+	// r.HandleFunc("/msgs/{username}", AddMessageHandler).Methods("POST")
 
-	r.HandleFunc("/login", LoginHandler).Methods("GET", "POST")
-	r.HandleFunc("/logout", LogoutHandler).Methods("GET")
-	r.HandleFunc("/register", RegisterHandler).Methods("GET", "POST")
+	// r.HandleFunc("/login", LoginHandler).Methods("GET", "POST")
+	// r.HandleFunc("/logout", LogoutHandler).Methods("GET")
+	// r.HandleFunc("/register", RegisterHandler).Methods("GET", "POST")
 
-	// TODO
-	r.HandleFunc("/fllws/{username}", FollowPageHandler).Methods("GET")
-	r.HandleFunc("/fllws/{username}", FollowHander).Methods("POST")
+	// // TODO
+	// r.HandleFunc("/fllws/{username}", FollowPageHandler).Methods("GET")
+	// r.HandleFunc("/fllws/{username}", FollowHander).Methods("POST")
 
 	// Start the server on port 8080
 	fmt.Println("Server starting on http://localhost:8080")
