@@ -515,7 +515,7 @@ func AddMessageHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
-func FollowHandler(w http.ResponseWriter, r *http.Request) {
+func OLDFollowHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "session-name")
 	db, err := connectDB()
 	vars := mux.Vars(r)
@@ -542,7 +542,7 @@ func FollowHandler(w http.ResponseWriter, r *http.Request) {
 		whom_id)
 	session.AddFlash("You are now following " + vars["username"]) // TODO: Don't know if working
 	session.Save(r, w)
-	http.Redirect(w, r, fmt.Sprintf("/user_timeline/%s", vars["username"]), http.StatusFound)
+	http.Redirect(w, r, fmt.Sprintf("/fllws/%s", vars["username"]), http.StatusFound)
 
 }
 
@@ -576,6 +576,68 @@ func UnfollowHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, fmt.Sprintf("/user_timeline/%s", vars["username"]), http.StatusFound)
 }
 
+func FollowPageHandler(w http.ResponseWriter, r *http.Request) {
+	// Connect to the database
+	db, err := connectDB()
+	if err != nil {
+		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	// Query all followers
+	query := `
+	SELECT user.username FROM user
+	INNER JOIN follower ON follower.whom_id=user.user_id
+    WHERE follower.who_id=?
+    LIMIT ?`
+
+	vars := mux.Vars(r)
+	userId, err := getUserID(db, vars["username"])
+
+	rows, err := db.Query(query, userId, PER_PAGE)
+	if err != nil {
+		http.Error(w, "Query execution failed", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	// Collect followers
+	var followers []string
+	for rows.Next() {
+		var follower string
+		if err := rows.Scan(&follower); err != nil {
+			http.Error(w, "Error scanning rows", http.StatusInternalServerError)
+			return
+		}
+		followers = append(followers, follower)
+	}
+
+	for i, follower := range followers {
+		fmt.Fprintf(w, "Index %d: %s\n", i, follower)
+	}
+}
+
+func FollowHander(w http.ResponseWriter, r *http.Request) {
+	db, err := connectDB()
+	session, _ := store.Get(r, "session-name")
+	vars := mux.Vars(r)
+	if err != nil {
+		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	userID, ok := session.Values["user_id"].(int)
+	var user User
+
+	//POST FOLLOW
+	query := `INSERT INTO follower (who_id, whom_id) VALUES (?, ?)`
+
+	//POST UNFOLLOW
+	query := `DELETE FROM follower WHERE who_id=? and WHOM_ID=?`
+}
+
 func main() {
 	// Create a new mux router
 	initDB()
@@ -604,12 +666,9 @@ func main() {
 	r.HandleFunc("/logout", LogoutHandler).Methods("GET")
 	r.HandleFunc("/register", RegisterHandler).Methods("GET", "POST")
 
-	//r.HandleFunc("/{username}/follow", FollowHandler).Methods("GET")
-	//r.HandleFunc("/{username}/unfollow", UnfollowHandler).Methods("GET")
-
 	// TODO
-	r.HandleFunc("/fllws/{username}", FollowHandler).Methods("GET")
-	r.HandleFunc("/fllws/{username}", UnfollowHandler).Methods("GET")
+	r.HandleFunc("/fllws/{username}", FollowPageHandler).Methods("GET")
+	r.HandleFunc("/fllws/{username}", FollowHander).Methods("POST")
 
 	// Start the server on port 8080
 	fmt.Println("Server starting on http://localhost:8080")
