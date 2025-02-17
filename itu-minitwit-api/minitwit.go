@@ -26,7 +26,6 @@ func connectDB() (*sql.DB, error) {
 	return sql.Open("sqlite3", DATABASE)
 }
 
-
 // def update_latest(request: request):
 //     parsed_command_id = request.args.get("latest", type=int, default=-1)
 //     if parsed_command_id != -1:
@@ -65,9 +64,9 @@ func GetLatestHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"latest": latestID})
+	latestID_int, err := strconv.Atoi(latestID)
+	json.NewEncoder(w).Encode(map[string]int{"latest": latestID_int})
 }
-
 
 func FollowPageHandler(w http.ResponseWriter, r *http.Request) {
 	// Connect to the database
@@ -111,10 +110,9 @@ func FollowPageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-
 func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "session-name")
-	
+
 	// Connect to the database
 	db, err := connectDB()
 	if err != nil {
@@ -123,24 +121,28 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer db.Close()
 	UpdateLatest(r) // Updater the latest parameter
-	
+
 	// If user already in cookies, redirect
 	if session.Values["user_id"] != nil {
 		fmt.Println(session.Values["user_id"])
 		http.Redirect(w, r, "/", http.StatusFound) // TODO: Change to correct redirect
 		return
 	}
-	
+
 	var error string
 
 	if r.Method == "POST" {
-		username := r.FormValue("username")
-		email := r.FormValue("email")
-		password := r.FormValue("password")
-		password2 := r.FormValue("password2")
-
-		// Extract `latest` parameter from query (for API requests)
-		latestParam := r.URL.Query().Get("latest")
+		var data map[string]interface{}
+		err := json.NewDecoder(r.Body).Decode(&data)
+		if err != nil {
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+		//fmt.Printf("Received: %v", data)
+		username := data["username"].(string)
+		email := data["email"].(string)
+		password := data["pwd"].(string)
+		password2 := data["pwd"].(string)
 
 		// Validate input fields
 		if username == "" {
@@ -172,16 +174,6 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 					log.Println("Error inserting user:", err)
 					http.Error(w, "Failed to register user", http.StatusInternalServerError)
 					return
-				}
-
-				// Save the latest ID if provided in the query
-				if latestParam != "" {
-					err := os.WriteFile("latest_processed_sim_action_id.txt", []byte(latestParam), 0644)
-					if err != nil {
-						log.Println("Error updating latest action ID:", err)
-						http.Error(w, "Failed to update latest action ID", http.StatusInternalServerError)
-						return
-					}
 				}
 
 				// Flash message and redirect
