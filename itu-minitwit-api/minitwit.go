@@ -26,12 +26,6 @@ func connectDB() (*sql.DB, error) {
 	return sql.Open("sqlite3", DATABASE)
 }
 
-// def update_latest(request: request):
-//     parsed_command_id = request.args.get("latest", type=int, default=-1)
-//     if parsed_command_id != -1:
-//         with open("./latest_processed_sim_action_id.txt", "w") as fp:
-//             fp.write(str(parsed_command_id))
-
 func UpdateLatest(r *http.Request) {
 	parsedCommandID := -1
 	if latestParam := r.URL.Query().Get("latest"); latestParam != "" {
@@ -176,6 +170,121 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+func POSTFollowerHandler(w http.ResponseWriter, r *http.Request)  {
+	UpdateLatest(r)
+
+	notFromSim := NotReqFromSimulator(w,r)
+
+	if notFromSim {return}
+
+	db, err := connectDB()
+	if err != nil {
+		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+		return
+	}
+
+	defer db.Close()
+
+
+	vars := mux.Vars(r)
+
+	userID, _ := getUserID(db,vars["username"])
+
+	if userID == -1{
+		http.Error(w,"Cannot find user",http.StatusNotFound)
+		return
+	}
+
+	var data map[string]interface{}
+
+	json.NewDecoder(r.Body).Decode(&data)
+
+	if followsUsername, exists := data["follow"]; exists{
+		followsUserID,_ := getUserID(db,followsUsername.(string))
+		if followsUserID == -1{
+			http.Error(w,"The user you are trying to follow cannot be found", http.StatusNotFound)
+			return
+		}
+		query := `INSERT INTO follower (who_id, whom_id) VALUES (?, ?)`
+
+		res, err := db.Exec(query,userID,followsUserID)
+
+
+		lastInsertedID, err := res.LastInsertId()
+
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			data = map[string]interface{}{
+				"status": http.StatusBadRequest,
+				"res": err.Error(),
+			}
+		} else {
+			w.WriteHeader(http.StatusNoContent)
+			data = map[string]interface{}{
+				"status": http.StatusNoContent,
+				"res": fmt.Sprint(lastInsertedID),
+			}
+		}
+		json.NewEncoder(w).Encode(data)
+		return
+	} else if unfollowsUsername, exists := data["follow"]; exists {
+		unfollowsUserID,_ := getUserID(db,unfollowsUsername.(string))
+		if unfollowsUserID == -1{
+			http.Error(w,"The user you are trying to unfollow cannot be found", http.StatusNotFound)
+			return
+		}
+		query := `DELETE FROM follower WHERE who_id=? and WHOM_ID=?`
+		res, err := db.Exec(query, userID,unfollowsUserID)
+
+		lastInsertedID, err := res.LastInsertId()
+
+	
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			data = map[string]interface{}{
+				"status": http.StatusBadRequest,
+				"res": err.Error(),
+			}
+		} else {
+			w.WriteHeader(http.StatusNoContent)
+			data = map[string]interface{}{
+				"status": http.StatusNoContent,
+				"res": fmt.Sprint(lastInsertedID),
+			}
+		}
+		json.NewEncoder(w).Encode(data)
+		return
+	}
+
+}
+
+func GETFollowerHandler(w http.ResponseWriter, r *http.Request)  {
+	UpdateLatest(r)
+
+	notFromSim := NotReqFromSimulator(w,r)
+
+	if notFromSim {return}
+
+	db, err := connectDB()
+	if err != nil {
+		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+		return
+	}
+
+	defer db.Close()
+
+
+	vars := mux.Vars(r)
+
+	userID, _ := getUserID(db,vars["username"])
+
+	if userID == -1{
+		http.Error(w,"Cannot find user",http.StatusNotFound)
+		return
+	}
+
+}
+
 func main() {
 	// Create a new mux router
 	initDB()
@@ -194,8 +303,9 @@ func main() {
 
 	// Define the routes and their handlers
 	r.HandleFunc("/latest", GetLatestHandler).Methods("GET")
-	r.HandleFunc("/register", RegisterHandler).Methods("GET", "POST")
-
+	r.HandleFunc("/register", RegisterHandler).Methods("POST")
+	r.HandleFunc("/fllws/{username}", POSTFollowerHandler).Methods("POST")
+	r.HandleFunc("/fllws/{username}", GETFollowerHandler).Methods("GET")
 	// r.HandleFunc("/", TimelineHandler).Methods("GET") // not sure if we should keep this one
 	// r.HandleFunc("/msgs", PublicTimelineHandler).Methods("GET")
 	// r.HandleFunc("/msgs/{username}", UserTimelineHandler).Methods("GET")
