@@ -2,8 +2,10 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 
 	"golang.org/x/crypto/bcrypt"
@@ -78,4 +80,19 @@ func fileExists(filename string) bool {
 		return false
 	}
 	return !info.IsDir()
+}
+
+
+func NotReqFromSimulator(w http.ResponseWriter, r *http.Request) bool {
+	fromSimulator := r.Header.Get("Authorization")
+	if fromSimulator != "Basic c2ltdWxhdG9yOnN1cGVyX3NhZmUh" {
+		w.WriteHeader(http.StatusForbidden)
+		response := map[string]interface{}{
+			"status":   http.StatusForbidden,
+			"error_msg": "You are not authorized to use this resource!",
+		}
+		json.NewEncoder(w).Encode(response)
+		return true
+	}
+	return false
 }
