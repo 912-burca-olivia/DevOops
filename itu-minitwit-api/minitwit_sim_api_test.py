@@ -47,6 +47,7 @@ def test_latest():
     assert response.json()['latest'] == 1337
 
 
+
 def test_register():
     username = 'a'
     email = 'a@a.a'
@@ -62,7 +63,24 @@ def test_register():
     response = requests.get(f'{BASE_URL}/latest', headers=HEADERS)
     assert response.json()['latest'] == 1
 
+# No username should give correct respone code
+def test_register_d():
+    username = ''
+    email = 'a@a.a'
+    pwd = 'a'
+    data = {'username': username, 'email': email, 'pwd': pwd}
+    params = {'latest': 1}
+    response = requests.post(f'{BASE_URL}/register',
+                             data=json.dumps(data), headers=HEADERS, params=params)
+   # Assert that the response status code is 400 (Bad Request)
+    assert response.status_code == 400 
+    assert response.json()["status"] == 400
+    assert response.json()["error_msg"] == "You have to enter a username"
 
+    # verify that latest was updated
+    response = requests.get(f'{BASE_URL}/latest', headers=HEADERS)
+    assert response.json()['latest'] == 1
+    
 def test_create_msg():
     username = 'a'
     data = {'content': 'Blub!'}
