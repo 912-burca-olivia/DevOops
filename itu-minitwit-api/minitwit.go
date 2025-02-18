@@ -85,7 +85,7 @@ func FollowPageHandler(w http.ResponseWriter, r *http.Request) {
     LIMIT ?`
 
 	vars := mux.Vars(r)
-	userId, err := getUserID(db, vars["username"])
+	userId, _ := getUserID(db, vars["username"])
 
 	rows, err := db.Query(query, userId, PER_PAGE)
 	if err != nil {
@@ -111,80 +111,69 @@ func FollowPageHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func RegisterHandler(w http.ResponseWriter, r *http.Request) {
-	session, _ := store.Get(r, "session-name")
-
 	// Connect to the database
 	db, err := connectDB()
 	if err != nil {
 		http.Error(w, "Database connection failed", http.StatusInternalServerError)
 		return
 	}
+
 	defer db.Close()
+
 	UpdateLatest(r) // Updater the latest parameter
 
-	// If user already in cookies, redirect
-	if session.Values["user_id"] != nil {
-		fmt.Println(session.Values["user_id"])
-		http.Redirect(w, r, "/", http.StatusFound) // TODO: Change to correct redirect
-		return
-	}
+	var error = ""
 
-	var error string
+	var data map[string]interface{}
+	json.NewDecoder(r.Body).Decode(&data)
 
-	if r.Method == "POST" {
-		var data map[string]interface{}
-		err := json.NewDecoder(r.Body).Decode(&data)
-		if err != nil {
-			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+	username := data["username"].(string)
+	email := data["email"].(string)
+	password := data["pwd"].(string)
+	// Validate input fields
+	if username == "" {
+		error = "You have to enter a username"
+	} else if email == "" {
+		error = "You have to enter a valid email address"
+	} else if !strings.Contains(email, "@") {
+		error = "You have to enter a valid email address"
+	} else if password == "" {
+		error = "You have to enter a password"
+	}else {
+		// Check if the username is already taken
+		userId, _ := getUserID(db, username)
+
+		if userId != -1 {
+			error = "The username is already taken"
+		} else {
+			// Insert new user into the database
+			_, err := db.Exec("INSERT INTO user (username, email, pw_hash) VALUES (?, ?, ?)",
+				username, email, HashPassword(password),
+			)
+			if err != nil {
+				log.Println("Error inserting user:", err)
+				http.Error(w, "Failed to register user", http.StatusInternalServerError)
+				return
+			}
+			http.Redirect(w, r, "/latest", http.StatusOK)
 			return
 		}
-		//fmt.Printf("Received: %v", data)
-		username := data["username"].(string)
-		email := data["email"].(string)
-		password := data["pwd"].(string)
-		password2 := data["pwd"].(string)
-
-		// Validate input fields
-		if username == "" {
-			error = "You have to enter a username"
-		} else if email == "" {
-			error = "You have to enter a valid email address"
-		} else if !strings.Contains(email, "@") {
-			error = "You have to enter a valid email address"
-		} else if password == "" {
-			error = "You have to enter a password"
-		} else if password != password2 {
-			error = "The two passwords do not match"
-		} else {
-			// Check if the username is already taken
-			userId, err := getUserID(db, username)
-			if err != nil {
-				log.Println("Error retrieving user ID:", err)
-				http.Error(w, "Internal server error", http.StatusInternalServerError)
-				return
-			}
-			if userId != -1 {
-				error = "The username is already taken"
-			} else {
-				// Insert new user into the database
-				_, err := db.Exec("INSERT INTO user (username, email, pw_hash) VALUES (?, ?, ?)",
-					username, email, HashPassword(password),
-				)
-				if err != nil {
-					log.Println("Error inserting user:", err)
-					http.Error(w, "Failed to register user", http.StatusInternalServerError)
-					return
-				}
-
-				// Flash message and redirect
-				session.AddFlash("You were successfully registered and can login now")
-				session.Save(r, w)
-				http.Redirect(w, r, "/latest", http.StatusOK)
-				return
-			}
-		}
 	}
-	fmt.Printf(error)
+	var status int
+
+	if error == "" {
+		w.WriteHeader(http.StatusOK)
+		status = 200
+	} else {
+		w.WriteHeader(http.StatusBadRequest)
+		status = 400
+	}
+
+	response := map[string]interface{}{
+		"status":    status,
+		"error_msg": error,
+	}
+	json.NewEncoder(w).Encode(response)
 }
 
 func main() {
@@ -201,10 +190,11 @@ func main() {
 	r := mux.NewRouter()
 
 	// Serve static files (e.g., CSS, images, etc.) from the "static" folder
-	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	//r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 
 	// Define the routes and their handlers
 	r.HandleFunc("/latest", GetLatestHandler).Methods("GET")
+	r.HandleFunc("/register", RegisterHandler).Methods("GET", "POST")
 
 	// r.HandleFunc("/", TimelineHandler).Methods("GET") // not sure if we should keep this one
 	// r.HandleFunc("/msgs", PublicTimelineHandler).Methods("GET")
@@ -213,7 +203,6 @@ func main() {
 
 	// r.HandleFunc("/login", LoginHandler).Methods("GET", "POST")
 	// r.HandleFunc("/logout", LogoutHandler).Methods("GET")
-	r.HandleFunc("/register", RegisterHandler).Methods("GET", "POST")
 
 	// // TODO
 	// r.HandleFunc("/fllws/{username}", FollowPageHandler).Methods("GET")
