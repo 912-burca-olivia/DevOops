@@ -68,6 +68,16 @@ func GetLatestHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]int{"latest": latestID_int})
 }
 
+func GetNumberHandler(r *http.Request) int {
+	parsedCommandID := 100
+	if number := r.URL.Query().Get("no"); number != "" {
+		if id, err := strconv.Atoi(number); err == nil {
+			parsedCommandID = id
+		}
+	}
+	return parsedCommandID
+}
+
 func FollowPageHandler(w http.ResponseWriter, r *http.Request) {
 	// Connect to the database
 	db, err := connectDB()
@@ -187,6 +197,100 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf(error)
 }
 
+func GetAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
+	// Connect to the database
+	db, err := connectDB()
+	if err != nil {
+		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	//update latest param
+	UpdateLatest(r)
+	//number of requested messages
+	//rowNums := GetNumberHandler(r)
+
+	// select all messages
+	query := `
+	SELECT message.*, user.* FROM message, user
+        WHERE message.flagged = 0 AND message.author_id = user.user_id
+        ORDER BY message.pub_date DESC LIMIT ?`
+
+	vars := mux.Vars(r)
+	userId, err := getUserID(db, vars["username"])
+
+	rows, err := db.Query(query, userId, PER_PAGE)
+	if err != nil {
+		http.Error(w, "Query execution failed", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	// Collect ALL messages NOT DONE YET
+	var followers []string
+	for rows.Next() {
+		var follower string
+		if err := rows.Scan(&follower); err != nil {
+			http.Error(w, "Error scanning rows", http.StatusInternalServerError)
+			return
+		}
+		followers = append(followers, follower)
+	}
+
+	for i, follower := range followers {
+		fmt.Fprintf(w, "Index %d: %s\n", i, follower)
+	}
+
+}
+
+func GetUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
+	// Connect to the database
+	db, err := connectDB()
+	if err != nil {
+		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	//update latest param
+	UpdateLatest(r)
+	//number of requested messages
+	//rowNums := GetNumberHandler(r)
+
+	// select all messages from specific user
+	query := `
+	SELECT message.*, user.* FROM message, user
+	WHERE message.flagged = 0 AND
+	user.user_id = message.author_id AND user.user_id = ?
+	ORDER BY message.pub_date DESC LIMIT ?`
+
+	vars := mux.Vars(r)
+	userId, err := getUserID(db, vars["username"])
+
+	rows, err := db.Query(query, userId, PER_PAGE)
+	if err != nil {
+		http.Error(w, "Query execution failed", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	// Collect USER messages NOT DONE YET
+	var messages []Message
+	for rows.Next() {
+		var message Message
+		if err := rows.Scan(&message); err != nil {
+			http.Error(w, "Error scanning rows", http.StatusInternalServerError)
+			return
+		}
+		messages = append(messages, message)
+	}
+	// print rowNums times
+	for i, message := range messages {
+		fmt.Fprintf(w, "Index %d: %s\n", i, message)
+	}
+}
+
 func main() {
 	// Create a new mux router
 	initDB()
@@ -207,8 +311,8 @@ func main() {
 	r.HandleFunc("/latest", GetLatestHandler).Methods("GET")
 
 	// r.HandleFunc("/", TimelineHandler).Methods("GET") // not sure if we should keep this one
-	// r.HandleFunc("/msgs", PublicTimelineHandler).Methods("GET")
-	// r.HandleFunc("/msgs/{username}", UserTimelineHandler).Methods("GET")
+	r.HandleFunc("/msgs", GetAllMessagesHandler).Methods("GET")
+	r.HandleFunc("/msgs/{username}", GetUserMessagesHandler).Methods("GET")
 	// r.HandleFunc("/msgs/{username}", AddMessageHandler).Methods("POST")
 
 	// r.HandleFunc("/login", LoginHandler).Methods("GET", "POST")
@@ -216,7 +320,7 @@ func main() {
 	r.HandleFunc("/register", RegisterHandler).Methods("GET", "POST")
 
 	// // TODO
-	// r.HandleFunc("/fllws/{username}", FollowPageHandler).Methods("GET")
+	r.HandleFunc("/fllws/{username}", FollowPageHandler).Methods("GET")
 	// r.HandleFunc("/fllws/{username}", FollowHander).Methods("POST")
 
 	// Start the server on port 8080
