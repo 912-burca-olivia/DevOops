@@ -361,7 +361,7 @@ func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
    			FROM message
     		INNER JOIN user ON message.author_id = user.user_id
 			WHERE message.flagged = 0 
-			AND user.username = ?
+			AND user.user_id = ?
 			ORDER BY message.pub_date DESC
 			LIMIT ?;`
 
@@ -381,7 +381,7 @@ func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	// Collect USER messages NOT DONE YET
+	// Collect USER messages
 	var messages []Message
 	for rows.Next() {
 		var msg Message
