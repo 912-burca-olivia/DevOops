@@ -296,15 +296,11 @@ func GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	//update latest param
 	UpdateLatest(r)
 
-	// select all messages
 	query := `
-					SELECT message.message_id, message.author_id, message.text, message.pub_date, message.flagged, 
-					user.username, user.email
-					FROM message
-					INNER JOIN user ON message.author_id = user.user_id
-					WHERE message.flagged = 0
-					ORDER BY message.pub_date DESC
-					LIMIT ?;`
+		SELECT  message.text, message.pub_date, user.username
+		FROM message, user
+        WHERE message.flagged = 0 AND message.author_id = user.user_id
+        ORDER BY message.pub_date DESC LIMIT ?`
 
 	rows, err := db.Query(query, rowNums)
 	if err != nil {
@@ -314,12 +310,11 @@ func GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	// Collect messages
-	var messages []Message
+	var messages []APIMessage
 	for rows.Next() {
-		var msg Message
+		var msg APIMessage
 		if err := rows.Scan(
-			&msg.MessageID, &msg.AuthorID, &msg.Text, &msg.PubDate, &msg.Flagged,
-			&msg.Username, &msg.Email,
+			&msg.Content, &msg.PubDate, &msg.User,
 		); err != nil {
 			http.Error(w, "Error scanning rows", http.StatusInternalServerError)
 			return
@@ -332,9 +327,20 @@ func GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := map[string][]Message{"messages": messages}
+	var filteredMsgs []map[string]string
+
+	for _, msg := range messages {
+		filteredMsg := map[string]string{
+			"content":  msg.Content,
+			"pub_date": msg.PubDate,
+			"user":     msg.User,
+		}
+		filteredMsgs = append(filteredMsgs, filteredMsg)
+	}
+
+	//response := map[string][]Message{"messages": messages}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	json.NewEncoder(w).Encode(filteredMsgs)
 }
 
 func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
@@ -354,16 +360,11 @@ func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	//number of requested messages
 	rowNums := GetNumberHandler(r)
 
-	// select all messages from specific user
-	query := `
-    		SELECT message.message_id, message.author_id, message.text, message.pub_date, message.flagged, 
-            user.username, user.email
-   			FROM message
-    		INNER JOIN user ON message.author_id = user.user_id
-			WHERE message.flagged = 0 
-			AND user.user_id = ?
-			ORDER BY message.pub_date DESC
-			LIMIT ?;`
+	query := `	SELECT  message.text, message.pub_date, user.username
+				FROM message, user
+				WHERE message.flagged = 0 AND
+				user.user_id = message.author_id AND user.user_id = ?
+				ORDER BY message.pub_date DESC LIMIT ?`
 
 	vars := mux.Vars(r)
 
@@ -377,18 +378,21 @@ func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	rows, err := db.Query(query, userID, rowNums)
 	if err != nil {
 		http.Error(w, "Query execution failed", http.StatusInternalServerError)
+
+		fmt.Println("Is there error here: 3")
 		return
 	}
 	defer rows.Close()
 
 	// Collect USER messages
-	var messages []Message
+	var messages []APIMessage
 	for rows.Next() {
-		var msg Message
-		if err := rows.Scan(
-			&msg.MessageID, &msg.AuthorID, &msg.Text, &msg.PubDate, &msg.Flagged,
-			&msg.Username, &msg.Email,
+		var msg APIMessage
+		if err := rows.Scan(	
+			&msg.Content, &msg.PubDate, &msg.User,
 		); err != nil {
+			fmt.Println(err.Error())
+			fmt.Println("Is there error here: 1")
 			http.Error(w, "Error scanning rows", http.StatusInternalServerError)
 			return
 		}
@@ -397,12 +401,23 @@ func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err := rows.Err(); err != nil {
 		http.Error(w, "Error iterating over rows", http.StatusInternalServerError)
+		fmt.Println("Is there error here: 2")
 		return
 	}
 
-	response := map[string][]Message{"messages": messages}
+	var filteredMsgs []map[string]string
+
+	for _, msg := range messages {
+		filteredMsg := map[string]string{
+			"content":  msg.Content,
+			"pub_date": msg.PubDate,
+			"user":     msg.User,
+		}
+		filteredMsgs = append(filteredMsgs, filteredMsg)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	json.NewEncoder(w).Encode(filteredMsgs)
 }
 
 func POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {

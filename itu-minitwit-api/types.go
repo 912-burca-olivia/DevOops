@@ -1,13 +1,9 @@
 package main
 
-type Message struct {
-	MessageID int    `json:"message_id"`
-	AuthorID  int    `json:"author_id"`
-	Text      string `json:"text"`
-	PubDate   int64  `json:"pub_date"`
-	Flagged   int    `json:"flagged"`
-	Username  string `json:"username"`
-	Email     string `json:"email"`
+type APIMessage struct {
+	Content string `json:"test"`
+	PubDate string `json:"pub_date"`
+	User 	string `json:"username"` 
 }
 
 type User struct {
@@ -22,7 +18,3 @@ type Follower struct {
 	WhomID int `json:"whom_id"`
 }
 
-type TemplateMessage struct {
-	Message
-	Email string
-}
