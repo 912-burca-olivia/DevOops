@@ -18,7 +18,7 @@ import (
 const DATABASE = "minitwit.db"
 const PER_PAGE = 30
 
-//var db *sql.DB
+// var db *sql.DB
 var store = sessions.NewCookieStore([]byte("SESSION_KEY"))
 
 // connectDB opens a connection to the SQLite3 database
@@ -43,7 +43,7 @@ func UpdateLatest(r *http.Request) {
 	}
 }
 
-func GetLatestHandler(w http.ResponseWriter, r *http.Request) {
+func GETLatestHandler(w http.ResponseWriter, r *http.Request) {
 	// Read the latest processed action ID from a file
 	UpdateLatest(r)
 	content, err := os.ReadFile("latest_processed_sim_action_id.txt")
@@ -80,25 +80,27 @@ func GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer db.Close()
+
+	//number of requested followers
+	rowNums := GetNumberHandler(r)
+
 	UpdateLatest(r)
 	vars := mux.Vars(r)
-	
-	userID, _ := getUserID(db,vars["username"])
 
-	if userID == -1{
-		http.Error(w,"Cannot find user",http.StatusNotFound)
+	userID, _ := getUserID(db, vars["username"])
+
+	if userID == -1 {
+		http.Error(w, "Cannot find user", http.StatusNotFound)
 		return
 	}
 
 	// Query all followers
-	query :=`	
+	query := `	
 				SELECT user.username FROM user
 				INNER JOIN follower ON follower.whom_id=user.user_id
 				WHERE follower.who_id=?
 				LIMIT ?
 			`
-
-
 
 	rows, err := db.Query(query, userID, PER_PAGE)
 	if err != nil {
@@ -118,16 +120,22 @@ func GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
 		followers = append(followers, follower)
 	}
 
-	response := map[string][]string{"follows": followers}
+	if rowNums > len(followers) {
+		rowNums = len(followers)
+	}
+
+	response := map[string][]string{"follows": followers[:rowNums]}
 	json.NewEncoder(w).Encode(response)
 }
 
-func POSTFollowerHandler(w http.ResponseWriter, r *http.Request)  {
+func POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 	UpdateLatest(r)
 
-	notFromSim := NotReqFromSimulator(w,r)
+	notFromSim := NotReqFromSimulator(w, r)
 
-	if notFromSim {return}
+	if notFromSim {
+		return
+	}
 
 	db, err := connectDB()
 	if err != nil {
@@ -137,13 +145,12 @@ func POSTFollowerHandler(w http.ResponseWriter, r *http.Request)  {
 
 	defer db.Close()
 
-
 	vars := mux.Vars(r)
 
-	userID, _ := getUserID(db,vars["username"])
+	userID, _ := getUserID(db, vars["username"])
 
-	if userID == -1{
-		http.Error(w,"Cannot find user",http.StatusNotFound)
+	if userID == -1 {
+		http.Error(w, "Cannot find user", http.StatusNotFound)
 		return
 	}
 
@@ -151,16 +158,15 @@ func POSTFollowerHandler(w http.ResponseWriter, r *http.Request)  {
 
 	json.NewDecoder(r.Body).Decode(&data)
 
-	if followsUsername, exists := data["follow"]; exists{
-		followsUserID,_ := getUserID(db,followsUsername.(string))
-		if followsUserID == -1{
-			http.Error(w,"The user you are trying to follow cannot be found", http.StatusNotFound)
+	if followsUsername, exists := data["follow"]; exists {
+		followsUserID, _ := getUserID(db, followsUsername.(string))
+		if followsUserID == -1 {
+			http.Error(w, "The user you are trying to follow cannot be found", http.StatusNotFound)
 			return
 		}
 		query := `INSERT INTO follower (who_id, whom_id) VALUES (?, ?)`
 
-		res, _ := db.Exec(query,userID,followsUserID)
-
+		res, _ := db.Exec(query, userID, followsUserID)
 
 		lastInsertedID, err := res.LastInsertId()
 
@@ -168,40 +174,39 @@ func POSTFollowerHandler(w http.ResponseWriter, r *http.Request)  {
 			w.WriteHeader(http.StatusBadRequest)
 			data = map[string]interface{}{
 				"status": http.StatusBadRequest,
-				"res": err.Error(),
+				"res":    err.Error(),
 			}
 		} else {
 			w.WriteHeader(http.StatusNoContent)
 			data = map[string]interface{}{
 				"status": http.StatusNoContent,
-				"res": fmt.Sprint(lastInsertedID),
+				"res":    fmt.Sprint(lastInsertedID),
 			}
 		}
 		json.NewEncoder(w).Encode(data)
 		return
 	} else if unfollowsUsername, exists := data["follow"]; exists {
-		unfollowsUserID,_ := getUserID(db,unfollowsUsername.(string))
-		if unfollowsUserID == -1{
-			http.Error(w,"The user you are trying to unfollow cannot be found", http.StatusNotFound)
+		unfollowsUserID, _ := getUserID(db, unfollowsUsername.(string))
+		if unfollowsUserID == -1 {
+			http.Error(w, "The user you are trying to unfollow cannot be found", http.StatusNotFound)
 			return
 		}
 		query := `DELETE FROM follower WHERE who_id=? and WHOM_ID=?`
-		res, _ := db.Exec(query, userID,unfollowsUserID)
+		res, _ := db.Exec(query, userID, unfollowsUserID)
 
 		lastInsertedID, err := res.LastInsertId()
 
-	
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			data = map[string]interface{}{
 				"status": http.StatusBadRequest,
-				"res": err.Error(),
+				"res":    err.Error(),
 			}
 		} else {
 			w.WriteHeader(http.StatusNoContent)
 			data = map[string]interface{}{
 				"status": http.StatusNoContent,
-				"res": fmt.Sprint(lastInsertedID),
+				"res":    fmt.Sprint(lastInsertedID),
 			}
 		}
 		json.NewEncoder(w).Encode(data)
@@ -209,7 +214,6 @@ func POSTFollowerHandler(w http.ResponseWriter, r *http.Request)  {
 	}
 
 }
-
 
 func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	// Connect to the database
@@ -240,7 +244,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		error = "You have to enter a valid email address"
 	} else if password == "" {
 		error = "You have to enter a password"
-	}else {
+	} else {
 		// Check if the username is already taken
 		userId, _ := getUserID(db, username)
 
@@ -277,11 +281,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-
-
-
-
-func GetAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
+func GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	// Connect to the database
 	db, err := connectDB()
 	if err != nil {
@@ -290,45 +290,57 @@ func GetAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer db.Close()
 
+	//number of requested messages
+	rowNums := GetNumberHandler(r)
 	//update latest param
 	UpdateLatest(r)
-	//number of requested messages
-	//rowNums := GetNumberHandler(r)
 
 	// select all messages
 	query := `
-	SELECT message.*, user.* FROM message, user
-        WHERE message.flagged = 0 AND message.author_id = user.user_id
-        ORDER BY message.pub_date DESC LIMIT ?`
+					SELECT message.message_id, message.author_id, message.text, message.pub_date, message.flagged, 
+					user.username, user.email
+					FROM message
+					INNER JOIN user ON message.author_id = user.user_id
+					WHERE message.flagged = 0
+					ORDER BY message.pub_date DESC
+					LIMIT ?;`
 
-	vars := mux.Vars(r)
-	userId, _ := getUserID(db, vars["username"])
-
-	rows, err := db.Query(query, userId, PER_PAGE)
+	rows, err := db.Query(query, PER_PAGE)
 	if err != nil {
 		http.Error(w, "Query execution failed", http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
 
-	// Collect ALL messages NOT DONE YET
-	var followers []string
+	// Collect messages
+	var messages []Message
 	for rows.Next() {
-		var follower string
-		if err := rows.Scan(&follower); err != nil {
+		var msg Message
+		if err := rows.Scan(
+			&msg.MessageID, &msg.AuthorID, &msg.Text, &msg.PubDate, &msg.Flagged,
+			&msg.Username, &msg.Email,
+		); err != nil {
 			http.Error(w, "Error scanning rows", http.StatusInternalServerError)
 			return
 		}
-		followers = append(followers, follower)
+		messages = append(messages, msg)
 	}
 
-	for i, follower := range followers {
-		fmt.Fprintf(w, "Index %d: %s\n", i, follower)
+	if err := rows.Err(); err != nil {
+		http.Error(w, "Error iterating over rows", http.StatusInternalServerError)
+		return
 	}
 
+	if rowNums > len(messages) {
+		rowNums = len(messages) // Ensure we don't exceed the length of messages
+	}
+
+	response := map[string][]Message{"messages": messages[:rowNums]}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
 
-func GetUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
+func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	// Connect to the database
 	db, err := connectDB()
 	if err != nil {
@@ -340,19 +352,29 @@ func GetUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	//update latest param
 	UpdateLatest(r)
 	//number of requested messages
-	//rowNums := GetNumberHandler(r)
+	rowNums := GetNumberHandler(r)
 
 	// select all messages from specific user
 	query := `
-	SELECT message.*, user.* FROM message, user
-	WHERE message.flagged = 0 AND
-	user.user_id = message.author_id AND user.user_id = ?
-	ORDER BY message.pub_date DESC LIMIT ?`
+    		SELECT message.message_id, message.author_id, message.text, message.pub_date, message.flagged, 
+            user.username, user.email
+   			FROM message
+    		INNER JOIN user ON message.author_id = user.user_id
+			WHERE message.flagged = 0 
+			AND user.username = ?
+			ORDER BY message.pub_date DESC
+			LIMIT ?;`
 
 	vars := mux.Vars(r)
-	userId, _ := getUserID(db, vars["username"])
 
-	rows, err := db.Query(query, userId, PER_PAGE)
+	userID, _ := getUserID(db, vars["username"])
+
+	if userID == -1 {
+		http.Error(w, "Cannot find user", http.StatusNotFound)
+		return
+	}
+
+	rows, err := db.Query(query, userID, PER_PAGE)
 	if err != nil {
 		http.Error(w, "Query execution failed", http.StatusInternalServerError)
 		return
@@ -362,17 +384,29 @@ func GetUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	// Collect USER messages NOT DONE YET
 	var messages []Message
 	for rows.Next() {
-		var message Message
-		if err := rows.Scan(&message); err != nil {
+		var msg Message
+		if err := rows.Scan(
+			&msg.MessageID, &msg.AuthorID, &msg.Text, &msg.PubDate, &msg.Flagged,
+			&msg.Username, &msg.Email,
+		); err != nil {
 			http.Error(w, "Error scanning rows", http.StatusInternalServerError)
 			return
 		}
-		messages = append(messages, message)
+		messages = append(messages, msg)
 	}
-	// print rowNums times
-	for i, message := range messages {
-		fmt.Fprintf(w, "Index %d: %s\n", i, message.Text)
+
+	if err := rows.Err(); err != nil {
+		http.Error(w, "Error iterating over rows", http.StatusInternalServerError)
+		return
 	}
+
+	if rowNums > len(messages) {
+		rowNums = len(messages)
+	}
+
+	response := map[string][]Message{"messages": messages[:rowNums]}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
 
 func main() {
@@ -389,14 +423,12 @@ func main() {
 	r := mux.NewRouter()
 
 	// Define the routes and their handlers
-	r.HandleFunc("/latest", GetLatestHandler).Methods("GET")
+	r.HandleFunc("/latest", GETLatestHandler).Methods("GET")
 	r.HandleFunc("/register", RegisterHandler).Methods("POST")
 	r.HandleFunc("/fllws/{username}", POSTFollowerHandler).Methods("POST")
 	r.HandleFunc("/fllws/{username}", GETFollowerHandler).Methods("GET")
-	r.HandleFunc("/msgs", GetAllMessagesHandler).Methods("GET")
-	r.HandleFunc("/msgs/{username}", GetUserMessagesHandler).Methods("GET")
-
-
+	r.HandleFunc("/msgs", GETAllMessagesHandler).Methods("GET")
+	r.HandleFunc("/msgs/{username}", GETUserMessagesHandler).Methods("GET")
 
 	// Start the server on port 8080
 	fmt.Println("Server starting on http://localhost:8080")
