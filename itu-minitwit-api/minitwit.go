@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
@@ -25,6 +26,11 @@ var store = sessions.NewCookieStore([]byte("SESSION_KEY"))
 // connectDB opens a connection to the SQLite3 database
 func connectDB() (*sql.DB, error) {
 	return sql.Open("sqlite3", DATABASE)
+}
+
+func FormatDateTime(timestamp int64) string {
+	t := time.Unix(timestamp, 0)
+	return t.Format("Jan 2, 2006 at 3:04PM")
 }
 
 func UpdateLatest(r *http.Request) {
@@ -128,9 +134,7 @@ func GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
 func POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 	UpdateLatest(r)
 
-	notFromSim := NotReqFromSimulator(w, r)
-
-	if notFromSim {
+	if NotReqFromSimulator(w, r) {
 		return
 	}
 
@@ -342,6 +346,9 @@ func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer db.Close()
 
+	if NotReqFromSimulator(w, r) {
+		return
+	}
 	//update latest param
 	UpdateLatest(r)
 	//number of requested messages
@@ -398,6 +405,66 @@ func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+func POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
+	// def test_create_msg():
+	// username = 'a'
+	// data = {'content': 'Blub!'}
+	// url = f'{BASE_URL}/msgs/{username}'
+	// params = {'latest': 2}
+	// response = requests.post(url, data=json.dumps(data),
+	//                          headers=HEADERS, params=params)
+	// assert response.ok
+
+	// # verify that latest was updated
+	// response = requests.get(f'{BASE_URL}/latest', headers=HEADERS)
+	// assert response.json()['latest'] == 2
+	UpdateLatest(r)
+
+	if NotReqFromSimulator(w, r) {
+		return
+	}
+
+	db, err := connectDB()
+	if err != nil {
+		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+		return
+	}
+
+	defer db.Close()
+
+	vars := mux.Vars(r)
+
+	userID, _ := getUserID(db, vars["username"])
+
+	if userID == -1 {
+		http.Error(w, "Cannot find user", http.StatusNotFound)
+		return
+	}
+
+	var data map[string]interface{}
+	json.NewDecoder(r.Body).Decode(&data)
+
+	content := data["content"].(string)
+
+	query := `INSERT INTO message (author_id, text, pub_date, flagged) VALUES (?, ?, ?, 0)`
+	_, err = db.Exec(query, userID, content, FormatDateTime(time.Now().Unix()))
+
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		data = map[string]interface{}{
+			"status": http.StatusBadRequest,
+			"res":    err.Error(),
+		}
+	} else {
+		w.WriteHeader(http.StatusNoContent)
+		data = map[string]interface{}{
+			"status": http.StatusNoContent,
+			"res":    "",
+		}
+	}
+	json.NewEncoder(w).Encode(data)
+}
+
 func main() {
 	// Create a new mux router
 	initDB()
@@ -418,6 +485,7 @@ func main() {
 	r.HandleFunc("/fllws/{username}", GETFollowerHandler).Methods("GET")
 	r.HandleFunc("/msgs", GETAllMessagesHandler).Methods("GET")
 	r.HandleFunc("/msgs/{username}", GETUserMessagesHandler).Methods("GET")
+	r.HandleFunc("/msgs/{username}", POSTMessagesHandler).Methods("POST")
 
 	// Start the server on port 8080
 	fmt.Println("Server starting on http://localhost:8080")
