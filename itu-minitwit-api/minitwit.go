@@ -16,7 +16,8 @@ import (
 )
 
 const DATABASE = "minitwit.db"
-const PER_PAGE = 30
+
+//const PER_PAGE = 30 //useful for the html template but not for the API implementation
 
 // var db *sql.DB
 var store = sessions.NewCookieStore([]byte("SESSION_KEY"))
@@ -102,7 +103,7 @@ func GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
 				LIMIT ?
 			`
 
-	rows, err := db.Query(query, userID, PER_PAGE)
+	rows, err := db.Query(query, userID, rowNums)
 	if err != nil {
 		http.Error(w, "Query execution failed", http.StatusInternalServerError)
 		return
@@ -120,11 +121,7 @@ func GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
 		followers = append(followers, follower)
 	}
 
-	if rowNums > len(followers) {
-		rowNums = len(followers)
-	}
-
-	response := map[string][]string{"follows": followers[:rowNums]}
+	response := map[string][]string{"follows": followers}
 	json.NewEncoder(w).Encode(response)
 }
 
@@ -305,7 +302,7 @@ func GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 					ORDER BY message.pub_date DESC
 					LIMIT ?;`
 
-	rows, err := db.Query(query, PER_PAGE)
+	rows, err := db.Query(query, rowNums)
 	if err != nil {
 		http.Error(w, "Query execution failed", http.StatusInternalServerError)
 		return
@@ -331,11 +328,7 @@ func GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if rowNums > len(messages) {
-		rowNums = len(messages) // Ensure we don't exceed the length of messages
-	}
-
-	response := map[string][]Message{"messages": messages[:rowNums]}
+	response := map[string][]Message{"messages": messages}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
@@ -374,7 +367,7 @@ func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := db.Query(query, userID, PER_PAGE)
+	rows, err := db.Query(query, userID, rowNums)
 	if err != nil {
 		http.Error(w, "Query execution failed", http.StatusInternalServerError)
 		return
@@ -400,11 +393,7 @@ func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if rowNums > len(messages) {
-		rowNums = len(messages)
-	}
-
-	response := map[string][]Message{"messages": messages[:rowNums]}
+	response := map[string][]Message{"messages": messages}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
