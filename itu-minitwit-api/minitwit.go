@@ -388,7 +388,7 @@ func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	var messages []APIMessage
 	for rows.Next() {
 		var msg APIMessage
-		if err := rows.Scan(	
+		if err := rows.Scan(
 			&msg.Content, &msg.PubDate, &msg.User,
 		); err != nil {
 			fmt.Println(err.Error())
@@ -502,7 +502,7 @@ func main() {
 	r.HandleFunc("/msgs/{username}", GETUserMessagesHandler).Methods("GET")
 	r.HandleFunc("/msgs/{username}", POSTMessagesHandler).Methods("POST")
 
-	// Start the server on port 8080
-	fmt.Println("Server starting on http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", r))
+	// Start the server on port 9090
+	fmt.Println("Server starting on http://localhost:9090")
+	log.Fatal(http.ListenAndServe(":9090", r))
 }
