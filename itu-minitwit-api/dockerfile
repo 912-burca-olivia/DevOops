@@ -9,15 +9,13 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download && go mod verify
 COPY schema.sql ./
-# To get the html templates
-COPY templates/ ./templates/
-COPY static/ ./static/
+
 # Copy the source code. Note the slash at the end, as explained in
 # https://docs.docker.com/reference/dockerfile/#copy
 COPY *.go ./
 
 # Build<
-RUN CGO_ENABLED=1 GOOS=linux go build -o /docker-minitwit
+RUN CGO_ENABLED=1 GOOS=linux go build -o /docker-minitwit-api
 
 # Optional:
 # To bind to a TCP port, runtime parameters must be supplied to the docker command.
@@ -27,7 +25,7 @@ RUN CGO_ENABLED=1 GOOS=linux go build -o /docker-minitwit
 # EXPOSE 8000
 
 # Run
-CMD ["/docker-minitwit"]
+CMD ["/docker-minitwit-api"]
 
 # Use 'docker build --tag minitwit .' to build the image
 # Use 'docker run --publish 8080:8080 minitwit' to run the container
