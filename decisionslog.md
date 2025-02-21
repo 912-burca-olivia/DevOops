@@ -13,5 +13,5 @@
 - separating html endpoints from API endpoints 
 
 ### WEEK 4: 
-- 
+- use docker hub token instead of password -> security
 
