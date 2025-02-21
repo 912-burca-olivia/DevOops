@@ -186,7 +186,7 @@ func POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		json.NewEncoder(w).Encode(data)
 		return
-	} else if unfollowsUsername, exists := data["follow"]; exists {
+	} else if unfollowsUsername, exists := data["unfollow"]; exists {
 		unfollowsUserID, _ := getUserID(db, unfollowsUsername.(string))
 		if unfollowsUserID == -1 {
 			http.Error(w, "The user you are trying to unfollow cannot be found", http.StatusNotFound)
@@ -261,14 +261,12 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "Failed to register user", http.StatusInternalServerError)
 				return
 			}
-			http.Redirect(w, r, "/latest", http.StatusOK)
-			return
 		}
 	}
 	var status int
 
 	if error == "" {
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(http.StatusNoContent)
 		status = 200
 	} else {
 		w.WriteHeader(http.StatusBadRequest)
@@ -421,18 +419,6 @@ func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
-	// def test_create_msg():
-	// username = 'a'
-	// data = {'content': 'Blub!'}
-	// url = f'{BASE_URL}/msgs/{username}'
-	// params = {'latest': 2}
-	// response = requests.post(url, data=json.dumps(data),
-	//                          headers=HEADERS, params=params)
-	// assert response.ok
-
-	// # verify that latest was updated
-	// response = requests.get(f'{BASE_URL}/latest', headers=HEADERS)
-	// assert response.json()['latest'] == 2
 	UpdateLatest(r)
 
 	if NotReqFromSimulator(w, r) {
@@ -452,6 +438,7 @@ func POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	userID, _ := getUserID(db, vars["username"])
 
 	if userID == -1 {
+		fmt.Printf("Cannot find user: %s", vars["username"])
 		http.Error(w, "Cannot find user", http.StatusNotFound)
 		return
 	}

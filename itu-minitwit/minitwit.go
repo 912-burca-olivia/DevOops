@@ -257,7 +257,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func RegisterHandle(w http.ResponseWriter, r *http.Request) {
+func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "session-name")
 
 	// Connect to the database
@@ -566,7 +566,7 @@ func main() {
 	r.HandleFunc("/", TimelineHandler).Methods("GET")
 	r.HandleFunc("/public_timeline", PublicTimelineHandler).Methods("GET")
 	r.HandleFunc("/login", LoginHandler).Methods("GET", "POST")
-	r.HandleFunc("/register", RegisterHandle).Methods("GET", "POST")
+	r.HandleFunc("/register", RegisterHandler).Methods("GET", "POST")
 	r.HandleFunc("/add_message", AddMessageHandler).Methods("POST")
 	r.HandleFunc("/logout", LogoutHandler).Methods("GET")
 	r.HandleFunc("/{username}/follow", FollowHandler).Methods("GET")
