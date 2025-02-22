@@ -13,9 +13,6 @@ Vagrant.configure("2") do |config|
     provider.size = 's-2vcpu-2gb'                      
   end
 
-  config.vm.network "forwarded_port", guest: 8080, host: 8080
-  config.vm.network "forwarded_port", guest: 5001, host: 5001
-
   config.vm.provision "shell", inline: <<-SHELL
 
     # Add Docker's official GPG key
