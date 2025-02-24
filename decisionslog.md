@@ -14,4 +14,6 @@
 
 ### WEEK 4: 
 - use docker hub token instead of password -> security
+- github actions: simple to use, easily integrated to our project!
+- cont integration OR cont deployment? TBC
 
