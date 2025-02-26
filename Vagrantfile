@@ -13,6 +13,10 @@ Vagrant.configure("2") do |config|
     provider.size = 's-2vcpu-2gb'                      
   end
 
+  # add environment variables for Docker credentials to the server
+  config.vm.provision "shell", inline: 'echo "export DOCKER_USERNAME=' + "'" + ENV["DOCKER_USERNAME"] + "'" + '" >> ~/.bash_profile'
+  config.vm.provision "shell", inline: 'echo "export DOCKER_PASSWORD=' + "'" + ENV["DOCKER_PASSWORD"] + "'" + '" >> ~/.bash_profile'
+
   config.vm.provision "shell", inline: <<-SHELL
 
     # Add Docker's official GPG key

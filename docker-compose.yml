@@ -2,9 +2,7 @@ version: "3.8"
 
 services:
   app:
-    build:
-      context: ./itu-minitwit
-      dockerfile: Dockerfile
+    image: ${DOCKER_USERNAME}/devoops-app:latest
     container_name: minitwit_app
     ports:
       - "8080:8080"
@@ -16,9 +14,7 @@ services:
       timeout: 5s
 
   api:
-    build:
-      context: ./itu-minitwit-api
-      dockerfile: Dockerfile
+    image: ${DOCKER_USERNAME}/devoops-api:latest
     container_name: minitwit_api
     ports:
       - "9090:9090"
