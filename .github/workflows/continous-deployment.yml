@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout 
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -52,6 +54,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v4
@@ -108,24 +112,33 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: test
+
     
     steps:
+
+      - name: Add SSH key to known_hosts
+        run: |
+          echo "SSH_HOST is: $SSH_HOST"
+          mkdir -p ~/.ssh
+          ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+
       - name: Configure SSH
         run: |
-          mkdir -p ~/.ssh/
           echo "$SSH_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
         env:
           SSH_KEY: ${{ secrets.SSH_KEY }}  
       - name: Deploy to server
 
-        run: >
-          ssh $SSH_USER@$SSH_HOST
-          -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no
-          source ~/.bash_profile
-          cd /home/vagrant/DevOops
-          docker compose -f docker-compose.yml pull
-          docker compose -f docker-compose.yml up -d
+        run: |
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST "
+            source ~/.bash_profile && \
+            cd /home/vagrant/DevOops && \
+            docker compose -f docker-compose.yml pull && \
+            docker compose -f docker-compose.yml up -d
+          "
         env:
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
