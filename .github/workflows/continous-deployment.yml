@@ -136,7 +136,7 @@ jobs:
         run: >
           ssh $SSH_USER@$SSH_HOST
           -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no
-          source ~/.bashrc
+          source ~/.bash_profile
           cd /home/vagrant/DevOops
           docker compose -f docker-compose.yml pull
           docker compose -f docker-compose.yml up -d
