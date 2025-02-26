@@ -8,6 +8,9 @@ WORKDIR /app
 # Download Go modules
 COPY go.mod go.sum ./
 RUN go mod download && go mod verify
+
+RUN ls 
+
 COPY schema.sql ./
 # To get the html templates
 COPY templates/ ./templates/
