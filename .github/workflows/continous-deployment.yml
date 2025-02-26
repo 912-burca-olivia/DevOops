@@ -133,13 +133,13 @@ jobs:
           SSH_KEY: ${{ secrets.SSH_KEY }}  
       - name: Deploy to server
 
-        run: >
-          ssh $SSH_USER@$SSH_HOST
-          -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no
-
-          cd /home/vagrant/DevOops
-          docker compose -f docker-compose.yml pull
-          docker compose -f docker-compose.yml up -d
+        run: |
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST "
+            source ~/.bash_profile && \
+            cd /home/vagrant/DevOops && \
+            docker compose -f docker-compose.yml pull && \
+            docker compose -f docker-compose.yml up -d
+          "
         env:
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
