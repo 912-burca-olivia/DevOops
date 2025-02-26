@@ -119,6 +119,7 @@ jobs:
 
       - name: Add SSH key to known_hosts
         run: |
+          run: echo "SSH_HOST is: $SSH_HOST"
           mkdir -p ~/.ssh
           ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
 
