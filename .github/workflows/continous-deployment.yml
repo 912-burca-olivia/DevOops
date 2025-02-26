@@ -47,6 +47,7 @@ jobs:
           cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/devoops-api:mysqlbuildcache,mode=max
   test:
     runs-on: ubuntu-latest
+    needs: build
 
     steps:
       - name: Checkout repository
@@ -106,7 +107,8 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
-
+    needs: test
+    
     steps:
       - name: Configure SSH
         run: |
