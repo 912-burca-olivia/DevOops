@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - add_CI_CD
 
   # allow manual triggers 
   workflow_dispatch:
@@ -16,6 +17,8 @@ jobs:
     steps:
       - name: Checkout 
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -52,6 +55,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v4
@@ -108,7 +113,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: test
-    
+
     steps:
       - name: Configure SSH
         run: |
