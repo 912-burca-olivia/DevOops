@@ -122,6 +122,8 @@ jobs:
           echo "SSH_HOST is: $SSH_HOST"
           mkdir -p ~/.ssh
           ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
 
       - name: Configure SSH
         run: |
