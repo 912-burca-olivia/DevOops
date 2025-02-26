@@ -1,4 +1,4 @@
-Vagrant.configure("2") do |config|
+wVagrant.configure("2") do |config|
   config.vm.box = 'digital_ocean'  
 
   config.ssh.private_key_path = "~/.ssh/id_rsa" 

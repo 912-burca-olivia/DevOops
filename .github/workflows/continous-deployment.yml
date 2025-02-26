@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - add_CI_CD
+      - add_CI_CD_ssh
 
   # allow manual triggers 
   workflow_dispatch:
