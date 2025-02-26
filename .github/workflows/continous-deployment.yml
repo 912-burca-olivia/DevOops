@@ -114,10 +114,16 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
 
+    
     steps:
+
+      - name: Add SSH key to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
+
       - name: Configure SSH
         run: |
-          mkdir -p ~/.ssh/
           echo "$SSH_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
         env:
