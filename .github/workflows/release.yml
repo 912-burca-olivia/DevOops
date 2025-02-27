@@ -2,9 +2,12 @@ name: Automatic Release
 
 on:
   schedule:
-    - cron: "0 0 * * 1" # Runs every Monday at 00:00 UTC
+    - cron: "0 19 * * 4" # Runs every Thursday at 19:00 UTC
   workflow_dispatch:
 
+permissions:
+  contents: write 
+  
 jobs:
   release:
     runs-on: ubuntu-latest
