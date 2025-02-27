@@ -14,6 +14,12 @@
 
 ### WEEK 4: 
 - use docker hub token instead of password -> security
-- github actions: simple to use, easily integrated to our project!
+- github actions: simple to use, easily integrated to our project, common tool in industry
 - cont integration OR cont deployment? TBC
+- chose to make the release job separate to CD job
+- pool resources as a team on digital ocean
+- increased storage in server
+- isolate DB from app, only API accesses it
+
+### WEEK 5:
 
