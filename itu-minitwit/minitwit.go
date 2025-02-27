@@ -230,11 +230,18 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 				renderTemplate(w, "login", map[string]interface{}{
 					"Error": "Invalid password",
 				})
+				return
+			} else if resp.StatusCode == http.StatusNotFound {
+				renderTemplate(w, "login", map[string]interface{}{
+					"Error": "Invalid username",
+				})
+				return
+			} else {
+				renderTemplate(w, "login", map[string]interface{}{
+					"Error": "Invalid credentials",
+				})
+				return
 			}
-			renderTemplate(w, "login", map[string]interface{}{
-				"Error": "Invalid username",
-			})
-			return
 		}
 	}
 	flashes := session.Flashes()
@@ -361,7 +368,7 @@ func AddMessageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	url := fmt.Sprintf("%s/msgs/%s", ENDPOINT, userDetails.Username)
-	data := map[string]string{"text": messageText}
+	data := map[string]string{"content": messageText}
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		fmt.Println("Error marshalling JSON:", err)

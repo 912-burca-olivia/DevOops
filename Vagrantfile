@@ -13,6 +13,10 @@ Vagrant.configure("2") do |config|
     provider.size = 's-2vcpu-2gb'                      
   end
 
+  # add environment variables for Docker credentials to the server
+  config.vm.provision "shell", inline: 'echo "export DOCKER_USERNAME=' + "'" + ENV["DOCKER_USERNAME"] + "'" + '" >> ~/.bash_profile'
+  config.vm.provision "shell", inline: 'echo "export DOCKER_PASSWORD=' + "'" + ENV["DOCKER_PASSWORD"] + "'" + '" >> ~/.bash_profile'
+
   config.vm.provision "shell", inline: <<-SHELL
 
     # Add Docker's official GPG key
@@ -42,6 +46,12 @@ Vagrant.configure("2") do |config|
     cd /home/vagrant/DevOops
     docker compose up -d --build
     
+    echo ". $HOME/.bashrc" >> $HOME/.bash_profile
+
+    echo -e "\nConfiguring credentials as environment variables...\n"
+
+    source $HOME/.bash_profile
+
 
   SHELL
 end

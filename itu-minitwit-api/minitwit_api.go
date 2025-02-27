@@ -274,7 +274,6 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		status = 400
 	}
-	fmt.Print(error)
 	response := map[string]interface{}{
 		"status":    status,
 		"error_msg": error,
@@ -442,7 +441,7 @@ func POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	var data map[string]interface{}
 	json.NewDecoder(r.Body).Decode(&data)
 
-	content := data["text"].(string)
+	content := data["content"].(string)
 
 	query := `INSERT INTO message (author_id, text, pub_date, flagged) VALUES (?, ?, ?, 0)`
 	_, err = db.Exec(query, userID, content, FormatDateTime(time.Now().Unix()))
@@ -542,7 +541,7 @@ func PostLoginHandler(w http.ResponseWriter, r *http.Request) {
 		  		WHERE user.username = ?`
 	err = db.QueryRow(query, req.Username).Scan(&foundUser.Username, &foundUser.Password)
 	if err != nil {
-		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		http.Error(w, "Invalid credentials", http.StatusNotFound)
 		return
 	}
 

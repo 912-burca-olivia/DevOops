@@ -6,14 +6,14 @@ FROM golang:1.23.6
 WORKDIR /app
 
 # Download Go modules
-COPY go.mod go.sum ./
+COPY ./itu-minitwit-api/go.mod ./itu-minitwit-api/go.sum ./
 RUN go mod download && go mod verify
-COPY schema.sql ./
+COPY ./itu-minitwit-api/schema.sql ./
+COPY ./itu-minitwit-api/latest_processed_sim_action_id.txt ./ 
 
 # Copy the source code. Note the slash at the end, as explained in
 # https://docs.docker.com/reference/dockerfile/#copy
-COPY *.go ./
-COPY latest_processed_sim_action_id.txt ./
+COPY ./itu-minitwit-api/*.go ./
 
 # Build<
 RUN CGO_ENABLED=1 GOOS=linux go build -o /minitwit-api

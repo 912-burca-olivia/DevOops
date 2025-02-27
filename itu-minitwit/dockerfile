@@ -6,14 +6,14 @@ FROM golang:1.23.6
 WORKDIR /app
 
 # Download Go modules
-COPY go.mod go.sum ./
+COPY ./itu-minitwit/go.mod ./itu-minitwit/go.sum ./
 RUN go mod download && go mod verify
 # To get the html templates
-COPY templates/ ./templates/
-COPY static/ ./static/
+COPY ./itu-minitwit/templates/ ./templates/
+COPY ./itu-minitwit/static/ ./static/
 # Copy the source code. Note the slash at the end, as explained in
 # https://docs.docker.com/reference/dockerfile/#copy
-COPY *.go ./
+COPY ./itu-minitwit/*.go ./
 
 # Build<
 RUN CGO_ENABLED=1 GOOS=linux go build -o /docker-minitwit

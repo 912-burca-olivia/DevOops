@@ -1,31 +1,66 @@
-name: Go Server Test
+name: Continuous Deployment
 
 on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
+
+  # allow manual triggers 
+  workflow_dispatch:
+    manual: true
 
 jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout 
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push devoops-app image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./itu-minitwit/dockerfile
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/devoops-app:latest
+          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/devoops-app:webbuildcache
+          cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/devoops-app:webbuildcache,mode=max
+
+      - name: Build and push devoops-api image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./itu-minitwit-api/dockerfile
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/devoops-api:latest
+          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/devoops-api:mysqlbuildcache
+          cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/devoops-api:mysqlbuildcache,mode=max
   test:
     runs-on: ubuntu-latest
+    needs: build
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
           go-version: '1.21'
-
-      - name: Start minitwit
-        run: |
-          cd itu-minitwit-api
-          nohup go run . &
-          sleep 5  # Wait for the server to start
 
       - name: Install Python and pytest
         run: |
@@ -33,7 +68,13 @@ jobs:
           sudo apt-get install -y python3 python3-pip
           pip install pytest requests
 
-      - name: Wait for minitwit to be ready
+      - name: Start Api
+        run: |
+          cd itu-minitwit-api
+          nohup go run . &
+          sleep 5  # Wait for the server to start
+
+      - name: Wait for server to be ready
         run: |
           until curl -s http://localhost:9090 > /dev/null; do
             echo "Waiting for server..."
@@ -45,5 +86,59 @@ jobs:
           cd itu-minitwit-api
           pytest 
 
-      - name: Stop Go server
+      - name: Stop Api
         run: pkill -f "go run ."
+
+      - name: Start App
+        run: |
+          cd itu-minitwit
+          nohup go run . &
+          sleep 5  # Wait for the server to start
+
+      - name: Wait for server to be ready
+        run: |
+          until curl -s http://localhost:8080 > /dev/null; do
+            echo "Waiting for server..."
+            sleep 2
+          done
+
+      - name: Run tests with pytest
+        run: | 
+          pytest refactored_minitwit_tests.py
+
+      - name: Stop App
+        run: pkill -f "go run ."
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+
+    
+    steps:
+
+      - name: Add SSH key to known_hosts
+        run: |
+          echo "SSH_HOST is: $SSH_HOST"
+          mkdir -p ~/.ssh
+          ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+
+      - name: Configure SSH
+        run: |
+          echo "$SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+        env:
+          SSH_KEY: ${{ secrets.SSH_KEY }}  
+      - name: Deploy to server
+
+        run: |
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST "
+            source ~/.bash_profile && \
+            cd /home/vagrant/DevOops && \
+            docker compose -f docker-compose.yml pull && \
+            docker compose -f docker-compose.yml up -d
+          "
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
