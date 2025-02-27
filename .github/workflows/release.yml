@@ -24,6 +24,12 @@ jobs:
           git config --global user.name "GitHub Actions"
           git config --global user.email "github-actions@github.com"
 
+      - name: Authenticate with PAT
+        run: |
+          git remote set-url origin https://x-access-token:${{ $PAT_TOKEN }}@github.com/912-burca-olivia/DevOops.git
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}  
+
       - name: Determine Next Semantic Version
         id: version
         run: |
