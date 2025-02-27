@@ -13,9 +13,10 @@ COPY schema.sql ./
 # Copy the source code. Note the slash at the end, as explained in
 # https://docs.docker.com/reference/dockerfile/#copy
 COPY *.go ./
+COPY latest_processed_sim_action_id.txt ./
 
 # Build<
-RUN CGO_ENABLED=1 GOOS=linux go build -o /docker-minitwit-api
+RUN CGO_ENABLED=1 GOOS=linux go build -o /minitwit-api
 
 # Optional:
 # To bind to a TCP port, runtime parameters must be supplied to the docker command.
@@ -25,7 +26,7 @@ RUN CGO_ENABLED=1 GOOS=linux go build -o /docker-minitwit-api
 # EXPOSE 8000
 
 # Run
-CMD ["/docker-minitwit-api"]
+CMD ["/minitwit-api"]
 
 # Use 'docker build --tag minitwit .' to build the image
 # Use 'docker run --publish 8080:8080 minitwit' to run the container
