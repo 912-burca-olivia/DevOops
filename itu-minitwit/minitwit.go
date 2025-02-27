@@ -547,7 +547,7 @@ func UserTimelineHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func getEndpoint() string {
-	defaultEndpoint := "localhost:9090" // Default if ENDPOINT is not set
+	defaultEndpoint := "http://localhost:9090" // Default if ENDPOINT is not set
 	if endpoint, exists := os.LookupEnv("ENDPOINT"); exists {
 		return endpoint
 	}
