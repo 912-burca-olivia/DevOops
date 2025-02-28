@@ -22,4 +22,6 @@
 - isolate DB from app, only API accesses it
 
 ### WEEK 5:
-
+- going to add Volume to dockerfile so that DB updated locally from container
+- 
+- 
