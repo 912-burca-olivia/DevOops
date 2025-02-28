@@ -18,6 +18,8 @@ import (
 
 const DATABASE = "minitwit.db"
 const PER_PAGE = 30
+
+const PER_PAGE = 30
 var store = sessions.NewCookieStore([]byte("SESSION_KEY"))
 //const PER_PAGE = 30 //useful for the html template but not for the API implementation
 
@@ -539,6 +541,7 @@ func PostLoginHandler(w http.ResponseWriter, r *http.Request) {
 	query := `	SELECT user.username, user.pw_hash
 		  		FROM user
 		  		WHERE user.username = ?`
+	err = db.QueryRow(query, req.Username).Scan(&foundUser.Username, &foundUser.Password)
 	err = db.QueryRow(query, req.Username).Scan(&foundUser.Username, &foundUser.Password)
 	if err != nil {
 		http.Error(w, "Invalid credentials", http.StatusNotFound)

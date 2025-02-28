@@ -189,7 +189,6 @@ func PublicTimelineHandler(w http.ResponseWriter, r *http.Request) {
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "session-name")
 
-
 	// If user is already in the cookies, just redirect
 	if session.Values["user_id"] != nil {
 		http.Redirect(w, r, "/", http.StatusFound)
@@ -374,7 +373,6 @@ func AddMessageHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Error marshalling JSON:", err)
 		return
 	}
-
 	_, err = http.Post(url, "application/json", bytes.NewBuffer(jsonData))
 	// Insert the message into the database
 	if err != nil {
