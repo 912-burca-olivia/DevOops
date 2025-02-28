@@ -9,6 +9,7 @@ WORKDIR /app
 COPY ./itu-minitwit-api/go.mod ./itu-minitwit-api/go.sum ./
 RUN go mod download && go mod verify
 COPY ./itu-minitwit-api/schema.sql ./
+COPY ./itu-minitwit-api/latest_processed_sim_action_id.txt ./ 
 
 # Copy the source code. Note the slash at the end, as explained in
 # https://docs.docker.com/reference/dockerfile/#copy
