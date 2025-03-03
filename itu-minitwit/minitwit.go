@@ -308,7 +308,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 				res, err := db.Exec("insert into user (	username, email, pw_hash) values (?, ?, ?)",
 					r.FormValue("username"),
 					r.FormValue("email"),
-					HashPassword(r.FormValue("password")),
+					r.FormValue("password"),
 				)
 				if err != nil {
 					fmt.Println("This is bad")

@@ -254,7 +254,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		} else {
 			// Insert new user into the database
 			_, err := db.Exec("INSERT INTO user (username, email, pw_hash) VALUES (?, ?, ?)",
-				username, email, HashPassword(password),
+				username, email, password,
 			)
 			if err != nil {
 				log.Println("Error inserting user:", err)
