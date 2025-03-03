@@ -189,6 +189,7 @@ func PublicTimelineHandler(w http.ResponseWriter, r *http.Request) {
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "session-name")
 
+
 	// If user is already in the cookies, just redirect
 	if session.Values["user_id"] != nil {
 		http.Redirect(w, r, "/", http.StatusFound)
@@ -367,12 +368,13 @@ func AddMessageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	url := fmt.Sprintf("%s/msgs/%s", ENDPOINT, userDetails.Username)
-	data := map[string]string{"content": messageText}
+	data := map[string]string{"text": messageText}
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		fmt.Println("Error marshalling JSON:", err)
 		return
 	}
+
 	_, err = http.Post(url, "application/json", bytes.NewBuffer(jsonData))
 	// Insert the message into the database
 	if err != nil {
