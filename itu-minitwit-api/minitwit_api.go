@@ -12,12 +12,13 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/gorilla/sessions"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 const DATABASE = "minitwit.db"
 const PER_PAGE = 30
-
+var store = sessions.NewCookieStore([]byte("SESSION_KEY"))
 //const PER_PAGE = 30 //useful for the html template but not for the API implementation
 
 // var db *sql.DB
@@ -255,7 +256,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		} else {
 			// Insert new user into the database
 			_, err := db.Exec("INSERT INTO user (username, email, pw_hash) VALUES (?, ?, ?)",
-				username, email, HashPassword(password),
+				username, email, password,
 			)
 			if err != nil {
 				log.Println("Error inserting user:", err)
@@ -416,9 +417,10 @@ func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 func POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	UpdateLatest(r)
 
-	if NotReqFromSimulator(w, r) {
-		return
-	}
+
+	// if NotReqFromSimulator(w, r) {
+	// 	return
+	// }
 
 	db, err := connectDB()
 	if err != nil {
@@ -431,7 +433,6 @@ func POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 
 	userID, _ := getUserID(db, vars["username"])
-
 	if userID == -1 {
 		fmt.Printf("Cannot find user: %s", vars["username"])
 		http.Error(w, "Cannot find user", http.StatusNotFound)
@@ -441,11 +442,10 @@ func POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	var data map[string]interface{}
 	json.NewDecoder(r.Body).Decode(&data)
 
-	content := data["content"].(string)
+	content := data["text"].(string)
 
 	query := `INSERT INTO message (author_id, text, pub_date, flagged) VALUES (?, ?, ?, 0)`
 	_, err = db.Exec(query, userID, content, FormatDateTime(time.Now().Unix()))
-
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		data = map[string]interface{}{
@@ -547,11 +547,11 @@ func PostLoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// At this point we know that a user exists
-	// Check the password hash against the one found in the db
-	if CheckPasswordHash(req.Password, foundUser.Password) {
-
+	// Check the password hash against the one found in the db		
+	if req.Password == foundUser.Password {
 		w.WriteHeader(http.StatusOK)
 	} else {
+
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
@@ -616,6 +616,12 @@ func GetFollowingMessages(w http.ResponseWriter, r *http.Request) {
 func main() {
 	// Create a new mux router
 	initDB()
+	store.Options = &sessions.Options{
+		Path:     "/",
+		MaxAge:   3600 * 16, // 16 hours
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+	}
 
 	r := mux.NewRouter()
 

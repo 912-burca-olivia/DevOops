@@ -189,13 +189,13 @@ func PublicTimelineHandler(w http.ResponseWriter, r *http.Request) {
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "session-name")
 
+
 	// If user is already in the cookies, just redirect
 	if session.Values["user_id"] != nil {
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
 	}
 
-	var error string
 	if r.Method == "POST" {
 		data := map[string]string{
 			"Username": r.FormValue("username"),
@@ -206,7 +206,6 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		url := fmt.Sprintf("%s/login", ENDPOINT)
 
 		if err != nil {
-
 			fmt.Println("Error marshalling JSON:", err)
 			return
 		}
@@ -220,15 +219,20 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
+
 			session.AddFlash("You were logged in")
 			session.Values["user_id"] = userdetails.UserID
 			session.Save(r, w)
 			http.Redirect(w, r, "/", http.StatusFound)
 			return
 		} else {
-			error = "Invalid credentials"
+			if resp.StatusCode == http.StatusUnauthorized {
+				renderTemplate(w, "login", map[string]interface{}{
+					"Error": "Invalid password",
+				})
+			}
 			renderTemplate(w, "login", map[string]interface{}{
-				"Error": error,
+				"Error": "Invalid username",
 			})
 			return
 		}
@@ -334,7 +338,7 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 func AddMessageHandler(w http.ResponseWriter, r *http.Request) {
 	// Get the current session
 	session, _ := store.Get(r, "session-name")
-
+	
 	// Check if the user is logged in
 	userID, ok := session.Values["user_id"].(int)
 	if !ok {
@@ -348,6 +352,7 @@ func AddMessageHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
 	// Check if the message text is provided
 	messageText := r.FormValue("text")
 	if messageText == "" {
@@ -356,19 +361,19 @@ func AddMessageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	url := fmt.Sprintf("%s/msgs/%s", ENDPOINT, userDetails.Username)
-	data := map[string]string{"content": messageText}
+	data := map[string]string{"text": messageText}
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		fmt.Println("Error marshalling JSON:", err)
 		return
 	}
+
 	_, err = http.Post(url, "application/json", bytes.NewBuffer(jsonData))
 	// Insert the message into the database
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
 	session.AddFlash("Your message was recorded")
 	session.Save(r, w)
 	http.Redirect(w, r, "/", http.StatusFound)
