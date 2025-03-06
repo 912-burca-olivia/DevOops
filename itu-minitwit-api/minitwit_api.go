@@ -442,7 +442,7 @@ func POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	var data map[string]interface{}
 	json.NewDecoder(r.Body).Decode(&data)
 
-	content := data["text"].(string)
+	content := data["content"].(string)
 
 	query := `INSERT INTO message (author_id, text, pub_date, flagged) VALUES (?, ?, ?, 0)`
 	_, err = db.Exec(query, userID, content, FormatDateTime(time.Now().Unix()))

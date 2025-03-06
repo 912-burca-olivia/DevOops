@@ -368,7 +368,7 @@ func AddMessageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	url := fmt.Sprintf("%s/msgs/%s", ENDPOINT, userDetails.Username)
-	data := map[string]string{"text": messageText}
+	data := map[string]string{"content": messageText}
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		fmt.Println("Error marshalling JSON:", err)
