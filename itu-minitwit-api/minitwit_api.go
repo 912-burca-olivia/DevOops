@@ -19,7 +19,6 @@ import (
 const DATABASE = "minitwit.db"
 const PER_PAGE = 30
 
-const PER_PAGE = 30
 var store = sessions.NewCookieStore([]byte("SESSION_KEY"))
 //const PER_PAGE = 30 //useful for the html template but not for the API implementation
 
