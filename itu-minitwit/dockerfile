@@ -8,8 +8,6 @@ WORKDIR /app
 # Download Go modules
 COPY ./itu-minitwit/go.mod ./itu-minitwit/go.sum ./
 RUN go mod download && go mod verify
-
-COPY ./itu-minitwit/schema.sql ./
 # To get the html templates
 COPY ./itu-minitwit/templates/ ./templates/
 COPY ./itu-minitwit/static/ ./static/
