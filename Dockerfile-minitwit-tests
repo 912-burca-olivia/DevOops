@@ -1,0 +1,19 @@
+# Use an official Python image as a base
+FROM python:3.11
+
+# Set the working directory
+WORKDIR /app
+
+# Install dependencies
+RUN pip install requests
+RUN pip install pytest
+
+# Copy the rest of the application code
+COPY itu-minitwit-api/minitwit_sim_api_test.py .
+COPY itu-minitwit-api/schema.sql .
+COPY itu-minitwit-api/minitwit.db .
+
+
+EXPOSE 9090
+# Set the entrypoint to run pytest
+CMD ["pytest"]
