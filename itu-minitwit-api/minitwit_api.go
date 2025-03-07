@@ -30,8 +30,6 @@ var store = sessions.NewCookieStore([]byte("SESSION_KEY"))
 
 // var db *sql.DB
 
-// connectDB opens a connection to the SQLite3 database
-
 // connectDB initializes GORM with SQLite
 func ConnectDB() {
 	databasePath := os.Getenv("DATABASE")

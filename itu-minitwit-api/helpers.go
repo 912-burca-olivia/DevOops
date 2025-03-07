@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/oliviab29/DevOops/itu-minitwit-api/types"
+	"minitwit/types"
 )
 
 // Taken from https://gowebexamples.com/password-hashing/
@@ -30,24 +30,18 @@ func getUserID(db *sql.DB, username string) (int, error) {
 	return userID, nil // Return userID if the user exists
 }
 
-// initDB initializes the database using schema.sql
+// InitDB initializes the database using GORM migrations
 func InitDB() {
-	// Initialize GORM DB connection
+	// Connect to the database
 	ConnectDB()
 
-	// Check if database file exists before migrating
-	if fileExists("minitwit.db") {
-		fmt.Println("Database already exists. Skipping migration.")
-		return
-	}
-
-	// AutoMigrate ensures tables exist based on GORM models
+	// Run migrations to ensure tables exist
 	err := DB.AutoMigrate(&types.User{}, &types.Follower{})
 	if err != nil {
-		log.Fatalf("Failed to migrate database: %v", err)
+		log.Fatalf("❌ Database migration failed: %v", err)
 	}
 
-	fmt.Println("Database initialized successfully using GORM")
+	fmt.Println("✅ Database initialized successfully using GORM")
 }
 
 func fileExists(filename string) bool {
