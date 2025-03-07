@@ -1,15 +1,28 @@
 package main
 
 type Message struct {
-	Text string `json:"content"`
-	PubDate string `json:"pub_date"`
-	Username    string `json:"user"`
+	MessageID int    `json:"message_id"`
+	AuthorID  int    `json:"author_id"`
+	Text      string `json:"text"`
+	PubDate   int64   `json:"pub_date"`
+	Flagged   int    `json:"flagged"`
+	Username  string `json:"username"`
+	Email     string `json:"email"`
 }
 
-type UserDetails struct {
+type User struct {
 	UserID   int    `json:"user_id"`
 	Username string `json:"username"`
 	Email    string `json:"email"`
+	PWHash   string `json:"pw_hash"`
 }
 
+type follower struct {
+	WhoID  int `json:"who_id"`
+	WhomID int `json:"whom_id"`
+}
 
+type TemplateMessage struct {
+	Message
+	Email string
+}

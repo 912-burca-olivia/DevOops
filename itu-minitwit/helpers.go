@@ -1,85 +1,81 @@
 package main
 
 import (
-	"encoding/json"
+	"database/sql"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
-	"strconv"
+	"log"
+	"os"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 // Taken from https://gowebexamples.com/password-hashing/
+
+func HashPassword(password string) string {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
+	if err != nil {
+		log.Println(err)
+	}
+	return string(bytes)
+}
+
+func CheckPasswordHash(password, hash string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+	return err == nil
+}
 
 func Error() string {
 	return "An error occurred."
 }
 
-// 
-func getUserDetailsByID(w http.ResponseWriter ,userID int, userDetails *UserDetails) error  {
-	baseURL := fmt.Sprintf("%s/%s", ENDPOINT,"/getUserDetails")
-	u, err := url.Parse(baseURL)
-	if err != nil{
-		fmt.Print(err.Error())
-		http.Error(w,err.Error(),http.StatusBadRequest)
-		return err
-	}
-	
-	// Add query parameters
-	queryParams := url.Values{}
-	//fmt.Print("Remember to change back to userID, %d", userID)
-	queryParams.Add("user_id",strconv.Itoa(userID))
-
-	u.RawQuery = queryParams.Encode()
-	u.Query()
-	res, err := http.Get(u.String())
+// getUserID retrieves the user_id for a given username.
+func getUserID(db *sql.DB, username string) (int, error) {
+	var userID int
+	err := db.QueryRow("SELECT user_id FROM user WHERE username = ?", username).Scan(&userID)
 	if err != nil {
-		http.Error(w,err.Error(),http.StatusBadRequest)
-		return err
+		if err == sql.ErrNoRows {
+			return -1, nil // Return -1 if no user is found
+		}
+		return -999, err // Return the error
 	}
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		fmt.Println("Error reading response body:", err)
-		return err
-	}
-	defer res.Body.Close()
-	err = json.Unmarshal(body, &userDetails)
-	if err != nil {
-		fmt.Println("Error unmarshalling JSON:", err)
-		return err
-	} 
-	return nil
+	return userID, nil // Return userID if the user exists
 }
-func getUserDetailsByUsername(w http.ResponseWriter ,username string, userDetails *UserDetails) error {
-	baseURL := fmt.Sprintf("%s/%s", ENDPOINT,"/getUserDetails")
-	u, err := url.Parse(baseURL)
-	if err != nil{
-		fmt.Print(err.Error())
-		http.Error(w,err.Error(),http.StatusBadRequest)
-		return err 
-	}
-	
-	// Add query parameters
-	queryParams := url.Values{}
-	queryParams.Add("username",username)
-	
-	u.RawQuery = queryParams.Encode()
-	u.Query()
-	res, err := http.Get(u.String())
+
+// initDB initializes the database using schema.sql
+func initDB() {
+	// Open database connection
+	db, err := connectDB()
 	if err != nil {
-		http.Error(w,err.Error(),http.StatusBadRequest)
-		return err
+		log.Fatalf("Failed to connect to database: %v", err)
 	}
-	body, err := io.ReadAll(res.Body)
+	defer db.Close()
+
+	// Check if the database file exists
+	if fileExists(DATABASE) {
+		fmt.Println("Database already exists. Skipping schema execution.")
+		return
+	}
+
+	// Read the schema.sql file
+	schemaFile := "schema.sql"
+	schema, err := os.ReadFile(schemaFile)
 	if err != nil {
-		fmt.Println("Error reading response body:", err)
-		return err
+		log.Fatalf("Failed to read %s: %v", schemaFile, err)
 	}
-	defer res.Body.Close()
-	err = json.Unmarshal(body, &userDetails)
+
+	// Execute schema script
+	_, err = db.Exec(string(schema))
 	if err != nil {
-		fmt.Println("Error unmarshalling JSON:", err)
-		return err
+		log.Fatalf("Failed to execute schema from %s: %v", schemaFile, err)
 	}
-	return nil
+
+	fmt.Println("Database initialized successfully using", schemaFile)
+}
+
+func fileExists(filename string) bool {
+	info, err := os.Stat(filename)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return !info.IsDir()
 }

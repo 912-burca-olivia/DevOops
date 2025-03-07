@@ -25,13 +25,13 @@ else if eq .Endpoint "user_timeline" }} {{ .ProfileUser.Username }}'s Timeline
 
 <ul class="messages">
   {{ range .messages }}
-  <li> <img src="{{.Username | Gravatar 48}}">
+  <li> <img src="{{.Email | Gravatar 48}}">
     <p>
         <strong
           ><a href="/user_timeline/{{ .Username }}">{{ .Username }}</a></strong
         >
         {{ .Text }}
-        <small>&mdash; {{ .PubDate}}</small>
+        <small>&mdash; {{ .PubDate | FormatDateTime}}</small>
       </li>
     </p>
   </li>

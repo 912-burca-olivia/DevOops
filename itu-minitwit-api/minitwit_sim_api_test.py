@@ -7,7 +7,7 @@ from pathlib import Path
 from contextlib import closing
 
 
-BASE_URL = 'http://localhost:9090'
+BASE_URL = 'http://127.0.0.1:9090'
 DATABASE = "minitwit.db"
 USERNAME = 'simulator'
 PWD = 'super_safe!'
@@ -86,8 +86,7 @@ def test_create_msg():
     data = {'content': 'Blub!'}
     url = f'{BASE_URL}/msgs/{username}'
     params = {'latest': 2}
-    for i in range(10):   
-        response = requests.post(url, data=json.dumps(data),
+    response = requests.post(url, data=json.dumps(data),
                              headers=HEADERS, params=params)
     assert response.ok
 
