@@ -4,7 +4,7 @@ services:
   app:
     build:
       context: ./itu-minitwit
-      dockerfile: Dockerfile
+      dockerfile: dockerfile_local
     container_name: minitwit_app
     ports:
       - "8080:8080"
@@ -20,7 +20,7 @@ services:
   api:
     build:
       context: ./itu-minitwit-api
-      dockerfile: Dockerfile
+      dockerfile: dockerfile_local
     container_name: minitwit_api
     ports:
       - "9090:9090"

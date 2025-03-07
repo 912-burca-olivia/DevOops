@@ -7,10 +7,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+
+	"github.com/oliviab29/DevOops/itu-minitwit-api/types"
 )
 
 // Taken from https://gowebexamples.com/password-hashing/
-
 
 func Error() string {
 	return "An error occurred."
@@ -30,34 +31,23 @@ func getUserID(db *sql.DB, username string) (int, error) {
 }
 
 // initDB initializes the database using schema.sql
-func initDB() {
-	// Open database connection
-	db, err := connectDB()
-	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+func InitDB() {
+	// Initialize GORM DB connection
+	ConnectDB()
 
-	// Check if the database file exists
-	if fileExists(DATABASE) {
-		fmt.Println("Database already exists. Skipping schema execution.")
+	// Check if database file exists before migrating
+	if fileExists("minitwit.db") {
+		fmt.Println("Database already exists. Skipping migration.")
 		return
 	}
 
-	// Read the schema.sql file
-	schemaFile := "schema.sql"
-	schema, err := os.ReadFile(schemaFile)
+	// AutoMigrate ensures tables exist based on GORM models
+	err := DB.AutoMigrate(&types.User{}, &types.Follower{})
 	if err != nil {
-		log.Fatalf("Failed to read %s: %v", schemaFile, err)
+		log.Fatalf("Failed to migrate database: %v", err)
 	}
 
-	// Execute schema script
-	_, err = db.Exec(string(schema))
-	if err != nil {
-		log.Fatalf("Failed to execute schema from %s: %v", schemaFile, err)
-	}
-
-	fmt.Println("Database initialized successfully using", schemaFile)
+	fmt.Println("Database initialized successfully using GORM")
 }
 
 func fileExists(filename string) bool {
@@ -68,13 +58,12 @@ func fileExists(filename string) bool {
 	return !info.IsDir()
 }
 
-
 func NotReqFromSimulator(w http.ResponseWriter, r *http.Request) bool {
 	fromSimulator := r.Header.Get("Authorization")
 	if fromSimulator != "Basic c2ltdWxhdG9yOnN1cGVyX3NhZmUh" {
 		w.WriteHeader(http.StatusForbidden)
 		response := map[string]interface{}{
-			"status":   http.StatusForbidden,
+			"status":    http.StatusForbidden,
 			"error_msg": "You are not authorized to use this resource!",
 		}
 		json.NewEncoder(w).Encode(response)

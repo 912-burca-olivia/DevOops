@@ -13,24 +13,39 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+
 	_ "github.com/mattn/go-sqlite3"
 )
 
 const DATABASE = "minitwit.db"
 const PER_PAGE = 30
 
+var DB *gorm.DB
+
 var store = sessions.NewCookieStore([]byte("SESSION_KEY"))
+
 //const PER_PAGE = 30 //useful for the html template but not for the API implementation
 
 // var db *sql.DB
 
 // connectDB opens a connection to the SQLite3 database
-func connectDB() (*sql.DB, error) {
+
+// connectDB initializes GORM with SQLite
+func ConnectDB() {
 	databasePath := os.Getenv("DATABASE")
 	if databasePath == "" {
-		databasePath = DATABASE // Fallback in case the env variable is missing
+		databasePath = "minitwit.db" // Fallback to default
 	}
-	return sql.Open("sqlite3", databasePath)
+
+	var err error
+	DB, err = gorm.Open(sqlite.Open(databasePath), &gorm.Config{})
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+
+	fmt.Println("Connected to SQLite database:", databasePath)
 }
 
 func FormatDateTime(timestamp int64) string {
@@ -417,7 +432,6 @@ func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 func POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	UpdateLatest(r)
 
-
 	// if NotReqFromSimulator(w, r) {
 	// 	return
 	// }
@@ -548,7 +562,7 @@ func PostLoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// At this point we know that a user exists
-	// Check the password hash against the one found in the db		
+	// Check the password hash against the one found in the db
 	if req.Password == foundUser.Password {
 		w.WriteHeader(http.StatusOK)
 	} else {
