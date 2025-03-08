@@ -1,10 +1,11 @@
 package main
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
+	"minitwit/helpers"
+	"minitwit/types"
 	"net/http"
 	"os"
 	"strconv"
@@ -13,622 +14,480 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
-	"gorm.io/driver/sqlite"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const DATABASE = "minitwit.db"
-const PER_PAGE = 30
-
-var DB *gorm.DB
-
 var store = sessions.NewCookieStore([]byte("SESSION_KEY"))
 
-//const PER_PAGE = 30 //useful for the html template but not for the API implementation
-
-// var db *sql.DB
-
-// connectDB initializes GORM with SQLite
-func ConnectDB() {
-	databasePath := os.Getenv("DATABASE")
-	if databasePath == "" {
-		databasePath = "minitwit.db" // Fallback to default
-	}
-
-	var err error
-	DB, err = gorm.Open(sqlite.Open(databasePath), &gorm.Config{})
-	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
-	}
-
-	fmt.Println("Connected to SQLite database:", databasePath)
-}
-
-func FormatDateTime(timestamp int64) string {
-	t := time.Unix(timestamp, 0)
-	return t.Format("Jan 2, 2006 at 3:04PM")
-}
-
+// UpdateLatest writes the provided "latest" query parameter (if any) to a file for simulator synchronization.
 func UpdateLatest(r *http.Request) {
-	parsedCommandID := -1
-	if latestParam := r.URL.Query().Get("latest"); latestParam != "" {
-		if id, err := strconv.Atoi(latestParam); err == nil {
-			parsedCommandID = id
-		}
+	latestParam := r.URL.Query().Get("latest")
+	if latestParam == "" {
+		return
 	}
-
-	if parsedCommandID != -1 {
-		file, err := os.Create("./latest_processed_sim_action_id.txt")
-		if err == nil {
+	if id, err := strconv.Atoi(latestParam); err == nil {
+		// Record the latest processed action ID
+		if file, err := os.Create("latest_processed_sim_action_id.txt"); err == nil {
 			defer file.Close()
-			file.WriteString(strconv.Itoa(parsedCommandID))
+			file.WriteString(strconv.Itoa(id))
 		}
 	}
 }
 
 func GETLatestHandler(w http.ResponseWriter, r *http.Request) {
-	// Read the latest processed action ID from a file
 	UpdateLatest(r)
 	content, err := os.ReadFile("latest_processed_sim_action_id.txt")
 	if err != nil {
-		http.Error(w, "Failed to read latest action ID", http.StatusInternalServerError)
+		helpers.RespondJSONError(w, http.StatusInternalServerError, "Failed to read latest action ID")
 		return
 	}
-
 	latestID := strings.TrimSpace(string(content))
 	if latestID == "" {
 		latestID = "-1"
 	}
-
+	latestVal, _ := strconv.Atoi(latestID)
 	w.Header().Set("Content-Type", "application/json")
-	latestID_int, _ := strconv.Atoi(latestID)
-	json.NewEncoder(w).Encode(map[string]int{"latest": latestID_int})
+	json.NewEncoder(w).Encode(map[string]int{"latest": latestVal})
 }
 
 func GetNumberHandler(r *http.Request) int {
-	parsedCommandID := 100
-	if number := r.URL.Query().Get("no"); number != "" {
-		if id, err := strconv.Atoi(number); err == nil {
-			parsedCommandID = id
+	// Utility to fetch "no" (number of items) parameter, default to 100 if not provided
+	count := 100
+	if numStr := r.URL.Query().Get("no"); numStr != "" {
+		if n, err := strconv.Atoi(numStr); err == nil {
+			count = n
 		}
 	}
-	return parsedCommandID
+	return count
 }
 
 func GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
-
-	db, err := connectDB()
-	if err != nil {
-		http.Error(w, "Database connection failed", http.StatusInternalServerError)
-		return
-	}
-	defer db.Close()
-
-	//number of requested followers
-	rowNums := GetNumberHandler(r)
-
 	UpdateLatest(r)
 	vars := mux.Vars(r)
 
-	userID, _ := getUserID(db, vars["username"])
-
-	if userID == -1 {
-		http.Error(w, "Cannot find user", http.StatusNotFound)
+	// Get user by username
+	var user types.User
+	if err := helpers.DB.Where("username = ?", vars["username"]).First(&user).Error; err != nil {
+		helpers.RespondJSONError(w, http.StatusNotFound, "Cannot find user")
 		return
 	}
 
-	// Query all followers
-	query := `	
-				SELECT user.username FROM user
-				INNER JOIN follower ON follower.whom_id=user.user_id
-				WHERE follower.who_id=?
-				LIMIT ?
-			`
-
-	rows, err := db.Query(query, userID, rowNums)
+	// Retrieve usernames of people this user follows
+	var followerUsernames []string
+	err := helpers.DB.Table("users").
+		Joins("JOIN followers ON followers.whom_id = users.id").
+		Where("followers.who_id = ?", user.ID).
+		Limit(GetNumberHandler(r)).
+		Pluck("users.username", &followerUsernames).Error
 	if err != nil {
-		http.Error(w, "Query execution failed", http.StatusInternalServerError)
+		helpers.RespondJSONError(w, http.StatusInternalServerError, "Failed to retrieve follows list")
 		return
 	}
-	defer rows.Close()
 
-	// Collect followers
-	var followers []string
-	for rows.Next() {
-		var follower string
-		if err := rows.Scan(&follower); err != nil {
-			http.Error(w, "Error scanning rows", http.StatusInternalServerError)
-			return
-		}
-		followers = append(followers, follower)
-	}
-
-	response := map[string][]string{"follows": followers}
-	json.NewEncoder(w).Encode(response)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string][]string{"follows": followerUsernames})
 }
 
 func POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 	UpdateLatest(r)
-	// if NotReqFromSimulator(w, r) {
-	// 	return
-	// }
-
-	db, err := connectDB()
-	if err != nil {
-		http.Error(w, "Database connection failed", http.StatusInternalServerError)
-		return
-	}
-
-	defer db.Close()
-
 	vars := mux.Vars(r)
 
-	userID, _ := getUserID(db, vars["username"])
-
-	if userID == -1 {
-		http.Error(w, "Cannot find user", http.StatusNotFound)
+	// Get user who is performing the action
+	var user types.User
+	if err := helpers.DB.Where("username = ?", vars["username"]).First(&user).Error; err != nil {
+		helpers.RespondJSONError(w, http.StatusNotFound, "Cannot find user")
 		return
 	}
 
-	var data map[string]interface{}
+	var data map[string]string
+	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+		helpers.RespondJSONError(w, http.StatusBadRequest, "Invalid JSON payload")
+		return
+	}
 
-	json.NewDecoder(r.Body).Decode(&data)
-
+	// Handle follow action
 	if followsUsername, exists := data["follow"]; exists {
-		followsUserID, _ := getUserID(db, followsUsername.(string))
-		if followsUserID == -1 {
-			http.Error(w, "The user you are trying to follow cannot be found", http.StatusNotFound)
+		var followsUser types.User
+		if err := helpers.DB.Where("username = ?", followsUsername).First(&followsUser).Error; err != nil {
+			helpers.RespondJSONError(w, http.StatusNotFound, "The user you are trying to follow cannot be found")
 			return
 		}
-		query := `INSERT INTO follower (who_id, whom_id) VALUES (?, ?)`
-
-		res, _ := db.Exec(query, userID, followsUserID)
-
-		lastInsertedID, err := res.LastInsertId()
-
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			data = map[string]interface{}{
-				"status": http.StatusBadRequest,
-				"res":    err.Error(),
-			}
-		} else {
-			w.WriteHeader(http.StatusNoContent)
-			data = map[string]interface{}{
-				"status": http.StatusNoContent,
-				"res":    fmt.Sprint(lastInsertedID),
-			}
-		}
-		json.NewEncoder(w).Encode(data)
-		return
-	} else if unfollowsUsername, exists := data["unfollow"]; exists {
-		unfollowsUserID, _ := getUserID(db, unfollowsUsername.(string))
-		if unfollowsUserID == -1 {
-			http.Error(w, "The user you are trying to unfollow cannot be found", http.StatusNotFound)
+		if user.ID == followsUser.ID {
+			helpers.RespondJSONError(w, http.StatusBadRequest, "You cannot follow yourself")
 			return
 		}
-		query := `DELETE FROM follower WHERE who_id=? and WHOM_ID=?`
-		res, _ := db.Exec(query, userID, unfollowsUserID)
-
-		lastInsertedID, err := res.LastInsertId()
-
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			data = map[string]interface{}{
-				"status": http.StatusBadRequest,
-				"res":    err.Error(),
-			}
-		} else {
-			w.WriteHeader(http.StatusNoContent)
-			data = map[string]interface{}{
-				"status": http.StatusNoContent,
-				"res":    fmt.Sprint(lastInsertedID),
-			}
+		follow := types.Follower{WhoID: user.ID, WhomID: followsUser.ID}
+		if err := helpers.DB.Create(&follow).Error; err != nil {
+			// Could be a duplicate follow or DB error
+			helpers.RespondJSONError(w, http.StatusBadRequest, "Could not follow user")
+			return
 		}
-		json.NewEncoder(w).Encode(data)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNoContent)
+		json.NewEncoder(w).Encode(map[string]string{"status": "success"})
 		return
 	}
+
+	// Handle unfollow action
+	if unfollowsUsername, exists := data["unfollow"]; exists {
+		var unfollowsUser types.User
+		if err := helpers.DB.Where("username = ?", unfollowsUsername).First(&unfollowsUser).Error; err != nil {
+			helpers.RespondJSONError(w, http.StatusNotFound, "The user you are trying to unfollow cannot be found")
+			return
+		}
+		if err := helpers.DB.Where("who_id = ? AND whom_id = ?", user.ID, unfollowsUser.ID).Delete(&types.Follower{}).Error; err != nil {
+			helpers.RespondJSONError(w, http.StatusBadRequest, "Could not unfollow user")
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNoContent)
+		json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+		return
+	}
+
+	// No valid follow/unfollow key provided
+	helpers.RespondJSONError(w, http.StatusBadRequest, "Missing follow or unfollow command")
 }
 
 func RegisterHandler(w http.ResponseWriter, r *http.Request) {
-	// Connect to the database
-	db, err := connectDB()
-	if err != nil {
-		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+	UpdateLatest(r)
+
+	var data map[string]string
+	json.NewDecoder(r.Body).Decode(&data)
+
+	username := strings.TrimSpace(data["username"])
+	email := strings.TrimSpace(data["email"])
+	pwd := data["pwd"]
+
+	// Input validation
+	if username == "" {
+		helpers.RespondJSONError(w, http.StatusBadRequest, "You have to enter a username")
+		return
+	}
+	if email == "" || !strings.Contains(email, "@") {
+		helpers.RespondJSONError(w, http.StatusBadRequest, "You have to enter a valid email address")
+		return
+	}
+	if pwd == "" {
+		helpers.RespondJSONError(w, http.StatusBadRequest, "You have to enter a password")
 		return
 	}
 
-	defer db.Close()
-
-	UpdateLatest(r) // Updater the latest parameter
-
-	var error = ""
-
-	var data map[string]interface{}
-	json.NewDecoder(r.Body).Decode(&data)
-
-	username := data["username"].(string)
-	email := data["email"].(string)
-	password := data["pwd"].(string)
-	// Validate input fields
-	if username == "" {
-		error = "You have to enter a username"
-	} else if email == "" {
-		error = "You have to enter a valid email address"
-	} else if !strings.Contains(email, "@") {
-		error = "You have to enter a valid email address"
-	} else if password == "" {
-		error = "You have to enter a password"
-	} else {
-		// Check if the username is already taken
-		userId, _ := getUserID(db, username)
-
-		if userId != -1 {
-			error = "The username is already taken"
-		} else {
-			// Insert new user into the database
-			_, err := db.Exec("INSERT INTO user (username, email, pw_hash) VALUES (?, ?, ?)",
-				username, email, password,
-			)
-			if err != nil {
-				log.Println("Error inserting user:", err)
-				http.Error(w, "Failed to register user", http.StatusInternalServerError)
-				return
-			}
-		}
+	// Check if username is already taken
+	var existing types.User
+	err := helpers.DB.Where("username = ?", username).First(&existing).Error
+	if err == nil {
+		// Found a user with the same username
+		helpers.RespondJSONError(w, http.StatusBadRequest, "The username is already taken")
+		return
+	} else if err != nil && err != gorm.ErrRecordNotFound {
+		// Unexpected database error
+		helpers.RespondJSONError(w, http.StatusInternalServerError, "Failed to check existing user")
+		return
 	}
-	var status int
 
-	if error == "" {
-		w.WriteHeader(http.StatusNoContent)
-		status = 200
-	} else {
-		w.WriteHeader(http.StatusBadRequest)
-		status = 400
+	// Create new user with hashed password
+	hash, err := bcrypt.GenerateFromPassword([]byte(pwd), bcrypt.DefaultCost)
+	if err != nil {
+		helpers.RespondJSONError(w, http.StatusInternalServerError, "Failed to register user")
+		return
 	}
-	response := map[string]interface{}{
-		"status":    status,
-		"error_msg": error,
+	newUser := types.User{
+		Username: username,
+		Email:    email,
+		PWHash:   string(hash),
 	}
-	json.NewEncoder(w).Encode(response)
+	if err := helpers.DB.Create(&newUser).Error; err != nil {
+		helpers.RespondJSONError(w, http.StatusInternalServerError, "Failed to register user")
+		return
+	}
+
+	// Successfully created, no content to return
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
-	// Connect to the database
-	db, err := connectDB()
-	if err != nil {
-		http.Error(w, "Database connection failed", http.StatusInternalServerError)
-		return
-	}
-	defer db.Close()
-
-	//number of requested messages
-	rowNums := GetNumberHandler(r)
-	//update latest param
 	UpdateLatest(r)
 
-	query := `
-		SELECT  message.text, message.pub_date, user.username
-		FROM message, user
-        WHERE message.flagged = 0 AND message.author_id = user.user_id
-        ORDER BY message.pub_date DESC LIMIT ?`
-
-	rows, err := db.Query(query, rowNums)
+	var messages []types.APIMessage
+	err := helpers.DB.Table("messages").
+		Select("messages.text AS content, messages.pub_date AS pub_date, users.username AS user").
+		Joins("JOIN users ON messages.author_id = users.id").
+		Where("messages.flagged = 0").
+		Order("messages.pub_date DESC").
+		Limit(GetNumberHandler(r)).
+		Find(&messages).Error
 	if err != nil {
-		http.Error(w, "Query execution failed", http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
-
-	// Collect messages
-	var messages []APIMessage
-	for rows.Next() {
-		var msg APIMessage
-		if err := rows.Scan(
-			&msg.Content, &msg.PubDate, &msg.User,
-		); err != nil {
-			http.Error(w, "Error scanning rows", http.StatusInternalServerError)
-			return
-		}
-		messages = append(messages, msg)
-	}
-
-	if err := rows.Err(); err != nil {
-		http.Error(w, "Error iterating over rows", http.StatusInternalServerError)
+		helpers.RespondJSONError(w, http.StatusInternalServerError, "Failed to retrieve messages")
 		return
 	}
 
-	var filteredMsgs []map[string]string
-
-	for _, msg := range messages {
-		filteredMsg := map[string]string{
-			"content":  msg.Content,
-			"pub_date": msg.PubDate,
-			"user":     msg.User,
-		}
-		filteredMsgs = append(filteredMsgs, filteredMsg)
-	}
-
-	//response := map[string][]Message{"messages": messages}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(filteredMsgs)
+	json.NewEncoder(w).Encode(messages)
 }
 
 func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
-	// Connect to the database
-	db, err := connectDB()
-	if err != nil {
-		http.Error(w, "Database connection failed", http.StatusInternalServerError)
-		return
-	}
-	defer db.Close()
-
-	//update latest param
 	UpdateLatest(r)
-	//number of requested messages
-	rowNums := GetNumberHandler(r)
-
-	query := `	SELECT  message.text, message.pub_date, user.username
-				FROM message, user
-				WHERE message.flagged = 0 AND
-				user.user_id = message.author_id AND user.user_id = ?
-				ORDER BY message.pub_date DESC LIMIT ?`
-
 	vars := mux.Vars(r)
-
-	userID, _ := getUserID(db, vars["username"])
-
-	if userID == -1 {
-		http.Error(w, "Cannot find user", http.StatusNotFound)
+	username := vars["username"]
+	if username == "" {
+		helpers.RespondJSONError(w, http.StatusBadRequest, "Missing username parameter")
 		return
 	}
 
-	rows, err := db.Query(query, userID, rowNums)
+	// Fetch the user ID (to ensure user exists)
+	userID, err := helpers.GetUserID(username)
 	if err != nil {
-		http.Error(w, "Query execution failed", http.StatusInternalServerError)
-
+		helpers.RespondJSONError(w, http.StatusInternalServerError, "Error retrieving user")
 		return
 	}
-	defer rows.Close()
-
-	// Collect USER messages
-	var messages []APIMessage
-	for rows.Next() {
-		var msg APIMessage
-		if err := rows.Scan(
-			&msg.Content, &msg.PubDate, &msg.User,
-		); err != nil {
-			fmt.Println(err.Error())
-			http.Error(w, "Error scanning rows", http.StatusInternalServerError)
-			return
-		}
-		messages = append(messages, msg)
-	}
-
-	if err := rows.Err(); err != nil {
-		http.Error(w, "Error iterating over rows", http.StatusInternalServerError)
+	if userID == 0 {
+		helpers.RespondJSONError(w, http.StatusNotFound, "User not found")
 		return
 	}
 
-	var filteredMsgs []map[string]string
-
-	for _, msg := range messages {
-		filteredMsg := map[string]string{
-			"content":  msg.Content,
-			"pub_date": msg.PubDate,
-			"user":     msg.User,
-		}
-		filteredMsgs = append(filteredMsgs, filteredMsg)
+	// Retrieve this user's messages without an extra join (we already know the username)
+	var msgs []types.Message
+	err = helpers.DB.Where("flagged = 0 AND author_id = ?", userID).
+		Order("pub_date DESC").
+		Limit(GetNumberHandler(r)).
+		Find(&msgs).Error
+	if err != nil {
+		helpers.RespondJSONError(w, http.StatusInternalServerError, "Failed to retrieve messages")
+		return
+	}
+	// Transform to APIMessage output
+	apiMessages := make([]types.APIMessage, 0, len(msgs))
+	for _, m := range msgs {
+		apiMessages = append(apiMessages, types.APIMessage{
+			Content: m.Text,
+			PubDate: m.PubDate,
+			User:    username,
+		})
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(filteredMsgs)
+	json.NewEncoder(w).Encode(apiMessages)
 }
 
 func POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	UpdateLatest(r)
-
-	// if NotReqFromSimulator(w, r) {
-	// 	return
-	// }
-
-	db, err := connectDB()
-	if err != nil {
-		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+	vars := mux.Vars(r)
+	username := vars["username"]
+	if username == "" {
+		helpers.RespondJSONError(w, http.StatusBadRequest, "Missing username parameter")
 		return
 	}
 
-	defer db.Close()
-
-	vars := mux.Vars(r)
-
-	userID, _ := getUserID(db, vars["username"])
-	if userID == -1 {
-		fmt.Printf("Cannot find user: %s", vars["username"])
-		http.Error(w, "Cannot find user", http.StatusNotFound)
+	// Get user ID for the author of the message
+	userID, err := helpers.GetUserID(username)
+	if err != nil {
+		helpers.RespondJSONError(w, http.StatusInternalServerError, "Error retrieving user")
+		return
+	}
+	if userID == 0 {
+		helpers.RespondJSONError(w, http.StatusNotFound, "User not found")
 		return
 	}
 
 	var data map[string]interface{}
-	json.NewDecoder(r.Body).Decode(&data)
-
-	content := data["content"].(string)
-
-	query := `INSERT INTO message (author_id, text, pub_date, flagged) VALUES (?, ?, ?, 0)`
-	_, err = db.Exec(query, userID, content, FormatDateTime(time.Now().Unix()))
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		data = map[string]interface{}{
-			"status": http.StatusBadRequest,
-			"res":    err.Error(),
-		}
-	} else {
-		w.WriteHeader(http.StatusNoContent)
-		data = map[string]interface{}{
-			"status": http.StatusNoContent,
-			"res":    "",
-		}
+	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+		helpers.RespondJSONError(w, http.StatusBadRequest, "Invalid request body")
+		return
 	}
-	json.NewEncoder(w).Encode(data)
+	content, ok := data["content"].(string)
+	if !ok || strings.TrimSpace(content) == "" {
+		helpers.RespondJSONError(w, http.StatusBadRequest, "Content is required")
+		return
+	}
+
+	message := types.Message{
+		AuthorID: userID,
+		Text:     content,
+		PubDate:  time.Now().Unix(),
+		Flagged:  0,
+	}
+	if err := helpers.DB.Create(&message).Error; err != nil {
+		helpers.RespondJSONError(w, http.StatusInternalServerError, "Failed to create message")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusNoContent)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status": http.StatusNoContent,
+		"res":    "Message posted successfully",
+	})
 }
+
 func GETUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
-	db, err := connectDB()
-	if err != nil {
-		http.Error(w, "Database connection failed", http.StatusInternalServerError)
-		return
-	}
-	defer db.Close()
-
-	userID := r.URL.Query().Get("user_id")
+	UpdateLatest(r)
+	userIDStr := r.URL.Query().Get("user_id")
 	username := r.URL.Query().Get("username")
-	var userDetailsRow *sql.Row
-	query := `SELECT user_id, username, email FROM user WHERE `
 
-	if userID != "" {
-		query += "user_id = ?"
-		userDetailsRow = db.QueryRow(query, userID)
-	} else {
-		query += "username = ?"
-		userDetailsRow = db.QueryRow(query, username)
-	}
-	var userdetails UserDetails
-	err = userDetailsRow.Scan(&userdetails.UserID, &userdetails.Username, &userdetails.Email)
-	if err != nil {
-		fmt.Print(err.Error())
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if userIDStr == "" && username == "" {
+		helpers.RespondJSONError(w, http.StatusBadRequest, "Either user_id or username is required")
 		return
 	}
-	json.NewEncoder(w).Encode(userdetails)
+
+	var user types.User
+	var err error
+	if userIDStr != "" {
+		userID, convErr := strconv.Atoi(userIDStr)
+		if convErr != nil {
+			helpers.RespondJSONError(w, http.StatusBadRequest, "Invalid user_id format")
+			return
+		}
+		err = helpers.DB.Where("id = ?", userID).First(&user).Error
+	} else {
+		err = helpers.DB.Where("username = ?", username).First(&user).Error
+	}
+
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			helpers.RespondJSONError(w, http.StatusNotFound, "User not found")
+		} else {
+			helpers.RespondJSONError(w, http.StatusInternalServerError, "Database query failed")
+		}
+		return
+	}
+
+	var userDetails struct {
+		UserID   uint   `json:"user_id"`
+		Username string `json:"username"`
+		Email    string `json:"email"`
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(userDetails)
 }
 
 func GETFollowingHandler(w http.ResponseWriter, r *http.Request) {
-	db, err := connectDB()
-	if err != nil {
-		http.Error(w, "Database connection failed", http.StatusInternalServerError)
-		return
-	}
-	defer db.Close()
-
+	UpdateLatest(r)
 	whoUsername := r.URL.Query().Get("whoUsername")
 	whomUsername := r.URL.Query().Get("whomUsername")
-	whoUsernameID, _ := getUserID(db, whoUsername)
-	whomUsernameID, _ := getUserID(db, whomUsername)
+
+	if whoUsername == "" || whomUsername == "" {
+		helpers.RespondJSONError(w, http.StatusBadRequest, "Both whoUsername and whomUsername are required")
+		return
+	}
+
+	whoUserID, err := helpers.GetUserID(whoUsername)
+	if err != nil {
+		helpers.RespondJSONError(w, http.StatusInternalServerError, "Error retrieving whoUsername")
+		return
+	}
+	if whoUserID == 0 {
+		helpers.RespondJSONError(w, http.StatusNotFound, "whoUsername not found")
+		return
+	}
+	whomUserID, err := helpers.GetUserID(whomUsername)
+	if err != nil {
+		helpers.RespondJSONError(w, http.StatusInternalServerError, "Error retrieving whomUsername")
+		return
+	}
+	if whomUserID == 0 {
+		helpers.RespondJSONError(w, http.StatusNotFound, "whomUsername not found")
+		return
+	}
+
+	var followers types.Follower
+	err = helpers.DB.Where("who_id = ? AND whom_id = ?", whoUserID, whomUserID).First(&followers).Error
 	var isFollowing bool
-	err = db.QueryRow(
-		`select 1 
-		from follower 
-		where follower.who_id = ? and follower.whom_id = ?`,
-		whoUsernameID,
-		whomUsernameID).
-		Scan(&isFollowing)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			fmt.Println("User is not following")
-		} else {
-			http.Error(w, "Database connection failed", http.StatusInternalServerError)
+		if err != gorm.ErrRecordNotFound {
+			helpers.RespondJSONError(w, http.StatusInternalServerError, "Database query failed")
+			return
 		}
-	}
-	json.NewEncoder(w).Encode(isFollowing)
-}
-
-func PostLoginHandler(w http.ResponseWriter, r *http.Request) {
-	db, err := connectDB()
-	if err != nil {
-		http.Error(w, "Database connection failed", http.StatusInternalServerError)
-		return
-	}
-	defer db.Close()
-
-	var req LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	// Check if user exists
-	var foundUser LoginRequest
-	query := `	SELECT user.username, user.pw_hash
-		  		FROM user
-		  		WHERE user.username = ?`
-	err = db.QueryRow(query, req.Username).Scan(&foundUser.Username, &foundUser.Password)
-	err = db.QueryRow(query, req.Username).Scan(&foundUser.Username, &foundUser.Password)
-	if err != nil {
-		http.Error(w, "Invalid credentials", http.StatusNotFound)
-		return
-	}
-
-	// At this point we know that a user exists
-	// Check the password hash against the one found in the db
-	if req.Password == foundUser.Password {
-		w.WriteHeader(http.StatusOK)
+		isFollowing = false
 	} else {
-
-		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
-		return
+		isFollowing = true
 	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"is_following": isFollowing})
 }
 
 func GetFollowingMessages(w http.ResponseWriter, r *http.Request) {
-	db, err := connectDB()
+	UpdateLatest(r)
+	userIDStr := r.URL.Query().Get("userid")
+	if userIDStr == "" {
+		helpers.RespondJSONError(w, http.StatusBadRequest, "Missing userid parameter")
+		return
+	}
+	userID, err := strconv.Atoi(userIDStr)
 	if err != nil {
-		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+		helpers.RespondJSONError(w, http.StatusBadRequest, "Invalid userid format")
 		return
 	}
-	defer db.Close()
 
-	var userID = r.URL.Query().Get("userid")
-	rows, err := db.Query(`
-	SELECT  m.text, m.pub_date, u.username
-	FROM message m, user u
-	WHERE m.flagged = 0 AND u.user_id = m.author_id
-	AND (m.author_id = ? OR m.author_id IN (
-		SELECT who_id FROM follower WHERE whom_id = ?
-		))
-		ORDER BY m.pub_date DESC LIMIT ?`, userID, userID, PER_PAGE)
+	// Check if the user exists
+	var user types.User
+	if err := helpers.DB.Where("id = ?", userID).First(&user).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			helpers.RespondJSONError(w, http.StatusNotFound, "User not found")
+		} else {
+			helpers.RespondJSONError(w, http.StatusInternalServerError, "Database query failed")
+		}
+		return
+	}
 
+	// Retrieve messages for the user and those they follow
+	var messages []types.APIMessage
+	err = helpers.DB.Table("messages").
+		Select("messages.text AS content, messages.pub_date AS pub_date, users.username AS user").
+		Joins("JOIN users ON messages.author_id = users.id").
+		Where(`messages.flagged = 0 AND (
+               messages.author_id = ? 
+               OR messages.author_id IN (SELECT who_id FROM followers WHERE whom_id = ?))`,
+			userID, userID).
+		Order("messages.pub_date DESC").
+		Limit(GetNumberHandler(r)).
+		Find(&messages).Error
 	if err != nil {
-		fmt.Println(err.Error())
-		http.Error(w, "Query execution failed", http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
-
-	// Collect messages
-	var messages []APIMessage
-	for rows.Next() {
-		var msg APIMessage
-		if err := rows.Scan(
-			&msg.Content, &msg.PubDate, &msg.User,
-		); err != nil {
-			http.Error(w, "Error scanning rows", http.StatusInternalServerError)
-			return
-		}
-		messages = append(messages, msg)
-	}
-
-	if err := rows.Err(); err != nil {
-		http.Error(w, "Error iterating over rows", http.StatusInternalServerError)
+		helpers.RespondJSONError(w, http.StatusInternalServerError, "Failed to fetch messages")
 		return
 	}
 
-	var filteredMsgs []map[string]string
-
-	for _, msg := range messages {
-		filteredMsg := map[string]string{
-			"content":  msg.Content,
-			"pub_date": msg.PubDate,
-			"user":     msg.User,
-		}
-		filteredMsgs = append(filteredMsgs, filteredMsg)
-	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(filteredMsgs)
+	json.NewEncoder(w).Encode(messages)
 }
+
+func PostLoginHandler(w http.ResponseWriter, r *http.Request) {
+	UpdateLatest(r)
+	var req types.LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		helpers.RespondJSONError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Find the user by username
+	var user types.User
+	if err := helpers.DB.Where("username = ?", req.Username).First(&user).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			helpers.RespondJSONError(w, http.StatusUnauthorized, "Invalid credentials")
+		} else {
+			helpers.RespondJSONError(w, http.StatusInternalServerError, "Database query failed")
+		}
+		return
+	}
+
+	// Compare the provided password with the stored hash
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PWHash), []byte(req.Password)); err != nil {
+		helpers.RespondJSONError(w, http.StatusUnauthorized, "Invalid credentials")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"message": "Login successful"})
+}
+
 func main() {
-	// Create a new mux router
-	initDB()
+	helpers.InitDB()
+
 	store.Options = &sessions.Options{
 		Path:     "/",
 		MaxAge:   3600 * 16, // 16 hours
@@ -638,7 +497,7 @@ func main() {
 
 	r := mux.NewRouter()
 
-	// Define the routes and their handlers
+	// Define API routes and handlers
 	r.HandleFunc("/latest", GETLatestHandler).Methods("GET")
 	r.HandleFunc("/register", RegisterHandler).Methods("POST")
 	r.HandleFunc("/fllws/{username}", POSTFollowerHandler).Methods("POST")
@@ -650,7 +509,7 @@ func main() {
 	r.HandleFunc("/getUserDetails", GETUserDetailsHandler).Methods("GET")
 	r.HandleFunc("/isfollowing", GETFollowingHandler).Methods("GET")
 	r.HandleFunc("/login", PostLoginHandler).Methods("POST")
-	// Start the server on port 9090
+
 	fmt.Println("Server starting on http://localhost:9090")
 	log.Fatal(http.ListenAndServe(":9090", r))
 }
