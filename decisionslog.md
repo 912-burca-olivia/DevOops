@@ -25,3 +25,7 @@
 - going to add Volume to dockerfile so that DB updated locally from container
 - 
 - 
+
+## Week 6:
+- decided for GORM as our ORM tool
+- 

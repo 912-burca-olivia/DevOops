@@ -123,7 +123,6 @@ func TimelineHandler(w http.ResponseWriter, r *http.Request) {
 		"Flashes":  flashes,
 		"Endpoint": "timeline",
 	})
-
 }
 
 func PublicTimelineHandler(w http.ResponseWriter, r *http.Request) {
@@ -183,12 +182,10 @@ func PublicTimelineHandler(w http.ResponseWriter, r *http.Request) {
 			"Endpoint": "public_timeline",
 		})
 	}
-
 }
 
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "session-name")
-
 
 	// If user is already in the cookies, just redirect
 	if session.Values["user_id"] != nil {
@@ -345,7 +342,7 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 func AddMessageHandler(w http.ResponseWriter, r *http.Request) {
 	// Get the current session
 	session, _ := store.Get(r, "session-name")
-	
+
 	// Check if the user is logged in
 	userID, ok := session.Values["user_id"].(int)
 	if !ok {
