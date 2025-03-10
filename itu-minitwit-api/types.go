@@ -18,7 +18,7 @@ type LoginRequest struct {
 }
 
 type User struct {
-	UserID    uint       `gorm:"primaryKey"`
+	UserID    uint       `gorm:"column:user_id;primaryKey"`
 	Username  string     `gorm:"unique;not null" json:"username"`
 	Email     string     `gorm:"not null" json:"email"`
 	PWHash    string     `gorm:"not null" json:"pw_hash"`

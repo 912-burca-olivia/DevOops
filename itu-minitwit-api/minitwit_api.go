@@ -13,6 +13,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
 	_ "github.com/mattn/go-sqlite3"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -90,57 +91,34 @@ func GetNumberHandler(r *http.Request) int {
 }
 
 func GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
-	/* TODO - use orm instead of query
-
 	db, err := connectDB()
 	if err != nil {
-		http.Error(w, "Database connection failed", http.StatusInternalServerError)
-		return
+		log.Fatalf("Failed to connect to database: %v", err)
 	}
-	defer db.Close()
-
-	//number of requested followers
-	rowNums := GetNumberHandler(r)
-
 	UpdateLatest(r)
 	vars := mux.Vars(r)
 
-	userID, _ := getUserID(db, vars["username"])
-
-	if userID == -1 {
-		http.Error(w, "Cannot find user", http.StatusNotFound)
+	// Get user by username
+	var user User
+	if err := db.Where("username = ?", vars["username"]).First(&user).Error; err != nil {
+		RespondJSONError(w, http.StatusNotFound, "Cannot find user")
 		return
 	}
 
-	// Query all followers
-	query := `
-				SELECT user.username FROM user
-				INNER JOIN follower ON follower.whom_id=user.user_id
-				WHERE follower.who_id=?
-				LIMIT ?
-			`
-
-	rows, err := db.Query(query, userID, rowNums)
+	// Retrieve usernames of people this user follows
+	var followerUsernames []string
+	err = db.Table("users").
+		Joins("JOIN followers ON followers.whom_id = users.user_id").
+		Where("followers.who_id = ?", user.UserID).
+		Limit(GetNumberHandler(r)).
+		Pluck("users.username", &followerUsernames).Error
 	if err != nil {
-		http.Error(w, "Query execution failed", http.StatusInternalServerError)
+		RespondJSONError(w, http.StatusInternalServerError, "Failed to retrieve follows list")
 		return
 	}
-	defer rows.Close()
 
-	// Collect followers
-	var followers []string
-	for rows.Next() {
-		var follower string
-		if err := rows.Scan(&follower); err != nil {
-			http.Error(w, "Error scanning rows", http.StatusInternalServerError)
-			return
-		}
-		followers = append(followers, follower)
-	}
-
-	response := map[string][]string{"follows": followers}
-	json.NewEncoder(w).Encode(response)
-	*/
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string][]string{"follows": followerUsernames})
 }
 
 func POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
@@ -229,254 +207,199 @@ func POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func RegisterHandler(w http.ResponseWriter, r *http.Request) {
-	/* TODO - use orm instead of query
-	// Connect to the database
 	db, err := connectDB()
 	if err != nil {
 		http.Error(w, "Database connection failed", http.StatusInternalServerError)
 		return
 	}
 
-	defer db.Close()
+	UpdateLatest(r)
 
-	UpdateLatest(r) // Updater the latest parameter
-
-	var error = ""
-
-	var data map[string]interface{}
+	var data map[string]string
 	json.NewDecoder(r.Body).Decode(&data)
 
-	username := data["username"].(string)
-	email := data["email"].(string)
-	password := data["pwd"].(string)
-	// Validate input fields
+	username := strings.TrimSpace(data["username"])
+	email := strings.TrimSpace(data["email"])
+	pwd := data["pw_hash"]
+
+	// Input validation
 	if username == "" {
-		error = "You have to enter a username"
-	} else if email == "" {
-		error = "You have to enter a valid email address"
-	} else if !strings.Contains(email, "@") {
-		error = "You have to enter a valid email address"
-	} else if password == "" {
-		error = "You have to enter a password"
-	} else {
-		// Check if the username is already taken
-		userId, _ := getUserID(db, username)
+		RespondJSONError(w, http.StatusBadRequest, "You have to enter a username")
+		return
+	}
+	if email == "" || !strings.Contains(email, "@") {
+		RespondJSONError(w, http.StatusBadRequest, "You have to enter a valid email address")
+		return
+	}
+	if pwd == "" {
+		RespondJSONError(w, http.StatusBadRequest, "You have to enter a password")
+		return
+	}
 
-		if userId != -1 {
-			error = "The username is already taken"
-		} else {
-			// Insert new user into the database
-			_, err := db.Exec("INSERT INTO user (username, email, pw_hash) VALUES (?, ?, ?)",
-				username, email, password,
-			)
-			if err != nil {
-				log.Println("Error inserting user:", err)
-				http.Error(w, "Failed to register user", http.StatusInternalServerError)
-				return
-			}
-		}
+	// Check if username is already taken
+	var existing User
+	err = db.Where("username = ?", username).First(&existing).Error
+	if err == nil {
+		// Found a user with the same username
+		RespondJSONError(w, http.StatusBadRequest, "The username is already taken")
+		return
+	} else if err != nil && err != gorm.ErrRecordNotFound {
+		// Unexpected database error
+		RespondJSONError(w, http.StatusInternalServerError, "Failed to check existing user")
+		return
 	}
-	var status int
 
-	if error == "" {
-		w.WriteHeader(http.StatusNoContent)
-		status = 200
-	} else {
-		w.WriteHeader(http.StatusBadRequest)
-		status = 400
+	// Create new user with hashed password
+	hash, err := bcrypt.GenerateFromPassword([]byte(pwd), bcrypt.DefaultCost)
+	if err != nil {
+		RespondJSONError(w, http.StatusInternalServerError, "Failed to register user")
+		return
 	}
-	response := map[string]interface{}{
-		"status":    status,
-		"error_msg": error,
+	newUser := User{
+		Username: username,
+		Email:    email,
+		PWHash:   string(hash),
 	}
-	json.NewEncoder(w).Encode(response)
-	*/
+	if err := db.Create(&newUser).Error; err != nil {
+		RespondJSONError(w, http.StatusInternalServerError, "Failed to register user")
+		return
+	}
+
+	// Successfully created, no content to return
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
-	/* TODO - use orm instead of query
-		// Connect to the database
-		db, err := connectDB()
-		if err != nil {
-			http.Error(w, "Database connection failed", http.StatusInternalServerError)
-			return
-		}
-		defer db.Close()
-
-		//number of requested messages
-		rowNums := GetNumberHandler(r)
-		//update latest param
-		UpdateLatest(r)
-
-		query := `
-			SELECT  message.text, message.pub_date, user.username
-			FROM message, user
-	        WHERE message.flagged = 0 AND message.author_id = user.user_id
-	        ORDER BY message.pub_date DESC LIMIT ?`
-
-		rows, err := db.Query(query, rowNums)
-		if err != nil {
-			http.Error(w, "Query execution failed", http.StatusInternalServerError)
-			return
-		}
-		defer rows.Close()
-
-		// Collect messages
-		var messages []APIMessage
-		for rows.Next() {
-			var msg APIMessage
-			if err := rows.Scan(
-				&msg.Content, &msg.PubDate, &msg.User,
-			); err != nil {
-				http.Error(w, "Error scanning rows", http.StatusInternalServerError)
-				return
-			}
-			messages = append(messages, msg)
-		}
-
-		if err := rows.Err(); err != nil {
-			http.Error(w, "Error iterating over rows", http.StatusInternalServerError)
-			return
-		}
-
-		var filteredMsgs []map[string]string
-
-		for _, msg := range messages {
-			filteredMsg := map[string]string{
-				"content":  msg.Content,
-				"pub_date": msg.PubDate,
-				"user":     msg.User,
-			}
-			filteredMsgs = append(filteredMsgs, filteredMsg)
-		}
-
-		//response := map[string][]Message{"messages": messages}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(filteredMsgs)
-	*/
-}
-
-func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
-	/* TODO - use orm instead of query
-	// Connect to the database
 	db, err := connectDB()
 	if err != nil {
 		http.Error(w, "Database connection failed", http.StatusInternalServerError)
 		return
 	}
-	defer db.Close()
-
-	//update latest param
 	UpdateLatest(r)
-	//number of requested messages
-	rowNums := GetNumberHandler(r)
 
-	query := `	SELECT  message.text, message.pub_date, user.username
-				FROM message, user
-				WHERE message.flagged = 0 AND
-				user.user_id = message.author_id AND user.user_id = ?
-				ORDER BY message.pub_date DESC LIMIT ?`
-
-	vars := mux.Vars(r)
-
-	userID, _ := getUserID(db, vars["username"])
-
-	if userID == -1 {
-		http.Error(w, "Cannot find user", http.StatusNotFound)
-		return
-	}
-
-	rows, err := db.Query(query, userID, rowNums)
-	if err != nil {
-		http.Error(w, "Query execution failed", http.StatusInternalServerError)
-
-		return
-	}
-	defer rows.Close()
-
-	// Collect USER messages
 	var messages []APIMessage
-	for rows.Next() {
-		var msg APIMessage
-		if err := rows.Scan(
-			&msg.Content, &msg.PubDate, &msg.User,
-		); err != nil {
-			fmt.Println(err.Error())
-			http.Error(w, "Error scanning rows", http.StatusInternalServerError)
-			return
-		}
-		messages = append(messages, msg)
-	}
-
-	if err := rows.Err(); err != nil {
-		http.Error(w, "Error iterating over rows", http.StatusInternalServerError)
+	err = db.Table("messages").
+		Select("messages.text AS content, messages.pub_date AS pub_date, users.username AS user").
+		Joins("JOIN users ON messages.author_id = users.user_id").
+		Where("messages.flagged = 0").
+		Order("messages.pub_date DESC").
+		Limit(GetNumberHandler(r)).
+		Find(&messages).Error
+	if err != nil {
+		RespondJSONError(w, http.StatusInternalServerError, "Failed to retrieve messages")
 		return
-	}
-
-	var filteredMsgs []map[string]string
-
-	for _, msg := range messages {
-		filteredMsg := map[string]string{
-			"content":  msg.Content,
-			"pub_date": msg.PubDate,
-			"user":     msg.User,
-		}
-		filteredMsgs = append(filteredMsgs, filteredMsg)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(filteredMsgs)
-	*/
+	json.NewEncoder(w).Encode(messages)
+}
+
+func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
+	db, err := connectDB()
+	if err != nil {
+		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+		return
+	}
+	UpdateLatest(r)
+	vars := mux.Vars(r)
+	username := vars["username"]
+	if username == "" {
+		RespondJSONError(w, http.StatusBadRequest, "Missing username parameter")
+		return
+	}
+
+	// Fetch the user ID (to ensure user exists)
+	userID, err := getUserID(db, username)
+	if err != nil {
+		RespondJSONError(w, http.StatusInternalServerError, "Error retrieving user")
+		return
+	}
+	if userID == 0 {
+		RespondJSONError(w, http.StatusNotFound, "User not found")
+		return
+	}
+
+	// Retrieve this user's messages without an extra join (we already know the username)
+	var msgs []Message
+	err = db.Where("flagged = 0 AND author_id = ?", userID).
+		Order("pub_date DESC").
+		Limit(GetNumberHandler(r)).
+		Find(&msgs).Error
+	if err != nil {
+		RespondJSONError(w, http.StatusInternalServerError, "Failed to retrieve messages")
+		return
+	}
+	// Transform to APIMessage output
+	apiMessages := make([]APIMessage, 0, len(msgs))
+	for _, m := range msgs {
+		apiMessages = append(apiMessages, APIMessage{
+			Content: m.Text,
+			PubDate: FormatDateTime(m.PubDate),
+			User:    username,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(apiMessages)
 }
 
 func POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
-	/* TODO - use orm instead of query
-	UpdateLatest(r)
-
-	// if NotReqFromSimulator(w, r) {
-	// 	return
-	// }
-
 	db, err := connectDB()
 	if err != nil {
 		http.Error(w, "Database connection failed", http.StatusInternalServerError)
 		return
 	}
 
-	defer db.Close()
-
+	UpdateLatest(r)
 	vars := mux.Vars(r)
 
-	userID, _ := getUserID(db, vars["username"])
-	if userID == -1 {
-		fmt.Printf("Cannot find user: %s", vars["username"])
-		http.Error(w, "Cannot find user", http.StatusNotFound)
+	username := vars["username"]
+	if username == "" {
+		RespondJSONError(w, http.StatusBadRequest, "Missing username parameter")
+		return
+	}
+
+	// Get user ID for the author of the message
+	userID, err := getUserID(db, username)
+	if err != nil {
+		RespondJSONError(w, http.StatusInternalServerError, "Error retrieving user")
+		return
+	}
+	if userID == 0 {
+		RespondJSONError(w, http.StatusNotFound, "User not found")
 		return
 	}
 
 	var data map[string]interface{}
-	json.NewDecoder(r.Body).Decode(&data)
-
-	content := data["content"].(string)
-
-	query := `INSERT INTO message (author_id, text, pub_date, flagged) VALUES (?, ?, ?, 0)`
-	_, err = db.Exec(query, userID, content, FormatDateTime(time.Now().Unix()))
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		data = map[string]interface{}{
-			"status": http.StatusBadRequest,
-			"res":    err.Error(),
-		}
-	} else {
-		w.WriteHeader(http.StatusNoContent)
-		data = map[string]interface{}{
-			"status": http.StatusNoContent,
-			"res":    "",
-		}
+	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+		RespondJSONError(w, http.StatusBadRequest, "Invalid request body")
+		return
 	}
-	json.NewEncoder(w).Encode(data)
-	*/
+	content, ok := data["content"].(string)
+	if !ok || strings.TrimSpace(content) == "" {
+		RespondJSONError(w, http.StatusBadRequest, "Content is required")
+		return
+	}
+
+	message := Message{
+		AuthorID: userID,
+		Text:     content,
+		PubDate:  time.Now().Unix(),
+		Flagged:  false,
+	}
+	if err := db.Create(&message).Error; err != nil {
+		RespondJSONError(w, http.StatusInternalServerError, "Failed to create message")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusNoContent)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status": http.StatusNoContent,
+		"res":    "Message posted successfully",
+	})
 }
+
 func GETUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
 	/* TODO - use orm instead of query
 	db, err := connectDB()
