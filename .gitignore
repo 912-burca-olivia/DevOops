@@ -1,3 +1,7 @@
 .env
 process.md
 .gitignore
+itu-minitwit-api/go.mod
+itu-minitwit-api/go.sum
+itu-minitwit/go.mod
+itu-minitwit/go.sum
