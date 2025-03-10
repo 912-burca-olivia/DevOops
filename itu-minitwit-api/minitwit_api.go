@@ -13,9 +13,9 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
 	_ "github.com/mattn/go-sqlite3"
-	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 const DATABASE = "minitwit.db"
@@ -31,7 +31,8 @@ func connectDB() (*gorm.DB, error) {
 		databasePath = DATABASE // Fallback in case the env variable is missing
 	}
 
-	db, err := gorm.Open(sqlite.Open(databasePath), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(databasePath), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Info)})
 	if err != nil {
 		return nil, err
 	}
@@ -249,16 +250,10 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create new user with hashed password
-	hash, err := bcrypt.GenerateFromPassword([]byte(pwd), bcrypt.DefaultCost)
-	if err != nil {
-		RespondJSONError(w, http.StatusInternalServerError, "Failed to register user")
-		return
-	}
 	newUser := User{
 		Username: username,
 		Email:    email,
-		PWHash:   string(hash),
+		PWHash:   pwd,
 	}
 	if err := db.Create(&newUser).Error; err != nil {
 		RespondJSONError(w, http.StatusInternalServerError, "Failed to register user")
