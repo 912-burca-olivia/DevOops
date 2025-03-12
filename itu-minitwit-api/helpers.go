@@ -16,22 +16,6 @@ func Error() string {
 	return "An error occurred."
 }
 
-// getUserID retrieves the user_id for a given username.
-// func getUserID(db *gorm.DB, username string) (int, error) {
-// 	/* TODO - use orm instead of query
-// 	var userID int
-// 	err := db.QueryRow("SELECT user_id FROM user WHERE username = ?", username).Scan(&userID)
-// 	if err != nil {
-// 		if err == sql.ErrNoRows {
-// 			return -1, nil // Return -1 if no user is found
-// 		}
-// 		return -999, err // Return the error
-// 	}
-// 	return userID, nil // Return userID if the user exists
-// 	*/
-// 	return -1, nil // remove this when the method is done
-// }
-
 func getUserID(db *gorm.DB, username string) (uint, error) {
 	var user User
 	result := db.Select("user_id").Where("username = ?", username).First(&user)
@@ -86,14 +70,4 @@ func NotReqFromSimulator(w http.ResponseWriter, r *http.Request) bool {
 		return true
 	}
 	return false
-}
-
-// RespondJSONError sends a JSON error response with a given status code and message.
-func RespondJSONError(w http.ResponseWriter, statusCode int, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":    statusCode,
-		"error_msg": message,
-	})
 }

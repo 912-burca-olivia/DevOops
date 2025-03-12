@@ -106,7 +106,7 @@ def test_get_latest_user_msgs():
 
     got_it_earlier = False
     for msg in response.json():
-        if msg['content'] == 'Blub!' and msg['user'] == username:
+        if msg['content'] == 'Blub!' and msg['username'] == username:
             got_it_earlier = True
 
     assert got_it_earlier
@@ -125,7 +125,7 @@ def test_get_latest_msgs():
 
     got_it_earlier = False
     for msg in response.json():
-        if msg['content'] == 'Blub!' and msg['user'] == username:
+        if msg['content'] == 'Blub!' and msg['username'] == username:
             got_it_earlier = True
 
     assert got_it_earlier

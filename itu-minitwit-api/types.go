@@ -32,7 +32,7 @@ type Message struct {
 	AuthorID  uint   `gorm:"not null"`
 	Author    User   `gorm:"foreignKey:AuthorID;references:UserID"`
 	Text      string `gorm:"not null"`
-	PubDate   int64  `gorm:"not null"`
+	PubDate   string `gorm:"not null"`
 	Flagged   bool   `gorm:"default:false"`
 }
 
