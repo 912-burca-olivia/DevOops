@@ -578,7 +578,7 @@ func GetFollowingMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var userID = 3000 //r.URL.Query().Get("userid")
+	var userID = r.URL.Query().Get("userid")
 
 	var messages []Message
 
