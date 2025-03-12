@@ -36,6 +36,7 @@ type Message struct {
 	Flagged   bool   `gorm:"default:false"`
 }
 
+// which is which?
 type Follower struct {
 	WhoID  uint `gorm:"not null"`
 	Who    User `gorm:"foreignKey:WhoID;references:UserID"`
