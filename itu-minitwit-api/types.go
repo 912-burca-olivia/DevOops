@@ -18,7 +18,7 @@ type LoginRequest struct {
 }
 
 type User struct {
-	UserID    uint       `gorm:"primaryKey"`
+	UserID    uint       `gorm:"column:user_id;primaryKey"`
 	Username  string     `gorm:"unique;not null" json:"username"`
 	Email     string     `gorm:"not null" json:"email"`
 	PWHash    string     `gorm:"not null" json:"pw_hash"`
@@ -32,7 +32,7 @@ type Message struct {
 	AuthorID  uint   `gorm:"not null"`
 	Author    User   `gorm:"foreignKey:AuthorID;references:UserID"`
 	Text      string `gorm:"not null"`
-	PubDate   int64  `gorm:"not null"`
+	PubDate   string `gorm:"not null"`
 	Flagged   bool   `gorm:"default:false"`
 }
 
