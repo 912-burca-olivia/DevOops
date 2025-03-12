@@ -72,11 +72,13 @@ func TimelineHandler(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/public_timeline", http.StatusFound)
 		return
 	}
+
 	// Get user data
 	var userDetails UserDetails
 	err := getUserDetailsByID(w, userID, &userDetails)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	baseURL := fmt.Sprintf("%s/followingmsgs", ENDPOINT)
@@ -90,29 +92,39 @@ func TimelineHandler(w http.ResponseWriter, r *http.Request) {
 	queryParams.Add("userid", strconv.Itoa(userDetails.UserID))
 	u.RawQuery = queryParams.Encode()
 	u.Query()
+
+	// ✅ Log the API URL being requested
+	log.Println("🟢 Fetching messages from:", u.String())
+
+	// Send request to API
 	res, err := http.Get(u.String())
-	// Query the API for messages
-	// Get url
-	// Send request
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	defer res.Body.Close()
 
+	// ✅ Log the HTTP status
+	log.Println("🟢 API Response Status:", res.Status)
+
+	// Read response body
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		fmt.Println("Error reading response body:", err)
 		return
 	}
 
+	// ✅ Log the raw response body
+	log.Println("🟢 Raw API Response:", string(body))
+
+	// Parse response into `messages`
 	var messages []Message
 	err = json.Unmarshal(body, &messages)
 	if err != nil {
-		fmt.Println("test")
-		fmt.Println("Error unmarshalling JSON:", err)
+		log.Println("🔴 Error unmarshalling JSON:", err)
 	}
-	flashes := session.Flashes() // Get flash messages
+
+	flashes := session.Flashes()
 	session.Save(r, w)
 
 	// Render template
@@ -123,7 +135,6 @@ func TimelineHandler(w http.ResponseWriter, r *http.Request) {
 		"Flashes":  flashes,
 		"Endpoint": "timeline",
 	})
-
 }
 
 func PublicTimelineHandler(w http.ResponseWriter, r *http.Request) {
@@ -342,45 +353,60 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func AddMessageHandler(w http.ResponseWriter, r *http.Request) {
-	// Get the current session
 	session, _ := store.Get(r, "session-name")
 
-	// Check if the user is logged in
+	// Check if user is logged in
 	userID, ok := session.Values["user_id"].(int)
 	if !ok {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-	// Get user details
+
+	// Fetch user details
 	var userDetails UserDetails
-	err := getUserDetailsByID(w, userID, &userDetails)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if err := getUserDetailsByID(w, userID, &userDetails); err != nil {
+		http.Error(w, "Failed to retrieve user details", http.StatusBadRequest)
 		return
 	}
 
-	// Check if the message text is provided
-	messageText := r.FormValue("text")
+	// Validate message text
+	messageText := strings.TrimSpace(r.FormValue("text"))
 	if messageText == "" {
 		http.Error(w, "Message cannot be empty", http.StatusBadRequest)
 		return
 	}
 
+	// Prepare API request
 	url := fmt.Sprintf("%s/msgs/%s", ENDPOINT, userDetails.Username)
-	data := map[string]string{"content": messageText}
-	jsonData, err := json.Marshal(data)
+	requestBody, err := json.Marshal(map[string]string{"content": messageText})
 	if err != nil {
-		fmt.Println("Error marshalling JSON:", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
-	_, err = http.Post(url, "application/json", bytes.NewBuffer(jsonData))
-	// Insert the message into the database
+	// Send POST request to API
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(requestBody))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Failed to send request to API", http.StatusInternalServerError)
 		return
 	}
-	session.AddFlash("Your message was recorded")
+	defer resp.Body.Close()
+
+	// Read API response
+	var apiResponse map[string]string
+	if err := json.NewDecoder(resp.Body).Decode(&apiResponse); err != nil {
+		http.Error(w, "Invalid API response", http.StatusInternalServerError)
+		return
+	}
+
+	// Ensure successful message posting
+	if resp.StatusCode != http.StatusCreated {
+		http.Error(w, apiResponse["error_msg"], resp.StatusCode)
+		return
+	}
+
+	// Flash message and redirect
+	session.AddFlash(apiResponse["message"])
 	session.Save(r, w)
 	http.Redirect(w, r, "/", http.StatusFound)
 }
@@ -467,55 +493,21 @@ func UserTimelineHandler(w http.ResponseWriter, r *http.Request) {
 	var userDetails UserDetails
 
 	if ok {
-		err := getUserDetailsByID(w, userID, &userDetails)
-		if err != nil {
+		if err := getUserDetailsByID(w, userID, &userDetails); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 	}
 
-	// vars["username"]
-	var profile_user UserDetails
-	err := getUserDetailsByUsername(w, vars["username"], &profile_user)
-	if err != nil {
+	// Get profile user details
+	var profileUser UserDetails
+	if err := getUserDetailsByUsername(w, vars["username"], &profileUser); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
-	var isFollowing bool
-	if session.Values["user_id"] != nil {
-		// Get if the user is following
-		baseURL := fmt.Sprintf("%s/%s", ENDPOINT, "/isfollowing")
-		u, err := url.Parse(baseURL)
-		if err != nil {
-			fmt.Print(err.Error())
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		queryParams := url.Values{}
-		queryParams.Add("whoUsername", profile_user.Username)
-		queryParams.Add("whomUsername", userDetails.Username)
-		u.RawQuery = queryParams.Encode()
-		u.Query()
-		res, err := http.Get(u.String())
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		body, err := io.ReadAll(res.Body)
-		if err != nil {
-			fmt.Println("Error reading response body:", err)
-			return
-		}
-		defer res.Body.Close()
-		err = json.Unmarshal(body, &isFollowing)
-		if err != nil {
-			fmt.Println("Error unmarshalling JSON:", err)
-			return
-		}
-	}
-
-	// Request the API for messages
-	url := fmt.Sprintf("%s/msgs/%s", ENDPOINT, profile_user.Username)
+	// Fetch messages from API
+	url := fmt.Sprintf("%s/msgs/%s", ENDPOINT, profileUser.Username)
 	res, err := http.Get(url)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -525,39 +517,26 @@ func UserTimelineHandler(w http.ResponseWriter, r *http.Request) {
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		fmt.Println("Error reading response body:", err)
+		http.Error(w, "Failed to read API response", http.StatusInternalServerError)
 		return
 	}
 
 	var messages []Message
-	err = json.Unmarshal(body, &messages)
-	if err != nil {
-		fmt.Println("Error unmarshalling JSON:", err)
+	if err := json.Unmarshal(body, &messages); err != nil {
+		http.Error(w, "Failed to parse API response", http.StatusInternalServerError)
+		return
 	}
 
-	flashes := session.Flashes() // Get flash messages
-	session.Save(r, w)           // Clear them after retrieval
+	flashes := session.Flashes()
+	session.Save(r, w)
 
-	// render template based on whether user is logged in or not
-	if ok {
-		renderTemplate(w, "timeline", map[string]interface{}{
-			"User":        userDetails,
-			"ProfileUser": profile_user,
-			"Followed":    isFollowing,
-			"messages":    messages,
-			"Endpoint":    "user_timeline",
-			"Flashes":     flashes,
-		})
-	} else {
-		renderTemplate(w, "timeline", map[string]interface{}{
-			"ProfileUser": profile_user,
-			"Followed":    isFollowing,
-			"messages":    messages,
-			"Endpoint":    "user_timeline",
-			"Flashes":     flashes,
-		})
-	}
-
+	renderTemplate(w, "timeline", map[string]interface{}{
+		"User":        userDetails,
+		"ProfileUser": profileUser,
+		"messages":    messages,
+		"Endpoint":    "user_timeline",
+		"Flashes":     flashes,
+	})
 }
 
 func getEndpoint() string {

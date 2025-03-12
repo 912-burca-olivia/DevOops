@@ -90,4 +90,4 @@ sqlite3 minitwit.db
 
 # 
 
-# 
+# RENAMED user to username in the test at line 109 & 128 to fit with new struct
