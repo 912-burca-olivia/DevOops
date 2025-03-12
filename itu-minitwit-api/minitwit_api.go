@@ -147,25 +147,22 @@ func GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
-	/* TODO - use orm instead of query
+
 	UpdateLatest(r)
-	// if NotReqFromSimulator(w, r) {
-	// 	return
-	// }
 
 	db, err := connectDB()
+	db.Debug()
+
 	if err != nil {
 		http.Error(w, "Database connection failed", http.StatusInternalServerError)
 		return
 	}
 
-	defer db.Close()
-
 	vars := mux.Vars(r)
 
 	userID, _ := getUserID(db, vars["username"])
 
-	if userID == -1 {
+	if userID == 0 {
 		http.Error(w, "Cannot find user", http.StatusNotFound)
 		return
 	}
@@ -176,59 +173,41 @@ func POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 
 	if followsUsername, exists := data["follow"]; exists {
 		followsUserID, _ := getUserID(db, followsUsername.(string))
-		if followsUserID == -1 {
+		if followsUserID == 0 {
 			http.Error(w, "The user you are trying to follow cannot be found", http.StatusNotFound)
 			return
 		}
-		query := `INSERT INTO follower (who_id, whom_id) VALUES (?, ?)`
 
-		res, _ := db.Exec(query, userID, followsUserID)
+		// Insert follow relationship
+		follower := Follower{WhoID: userID, WhomID: followsUserID}
 
-		lastInsertedID, err := res.LastInsertId()
+		err := db.Create(&follower).Error
 
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			data = map[string]interface{}{
-				"status": http.StatusBadRequest,
-				"res":    err.Error(),
-			}
-		} else {
-			w.WriteHeader(http.StatusNoContent)
-			data = map[string]interface{}{
-				"status": http.StatusNoContent,
-				"res":    fmt.Sprint(lastInsertedID),
-			}
+			http.Error(w, "Failed to follow user", http.StatusBadRequest)
+			return
 		}
+
 		json.NewEncoder(w).Encode(data)
 		return
 	} else if unfollowsUsername, exists := data["unfollow"]; exists {
 		unfollowsUserID, _ := getUserID(db, unfollowsUsername.(string))
-		if unfollowsUserID == -1 {
+		if unfollowsUserID == 0 {
 			http.Error(w, "The user you are trying to unfollow cannot be found", http.StatusNotFound)
 			return
 		}
-		query := `DELETE FROM follower WHERE who_id=? and WHOM_ID=?`
-		res, _ := db.Exec(query, userID, unfollowsUserID)
-
-		lastInsertedID, err := res.LastInsertId()
+		// Delete follow relationship
+		err := db.Where("who_id = ? AND whom_id = ?", userID, unfollowsUserID).Delete(&Follower{}).Error
 
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			data = map[string]interface{}{
-				"status": http.StatusBadRequest,
-				"res":    err.Error(),
-			}
-		} else {
-			w.WriteHeader(http.StatusNoContent)
-			data = map[string]interface{}{
-				"status": http.StatusNoContent,
-				"res":    fmt.Sprint(lastInsertedID),
-			}
+			http.Error(w, "Failed to unfollow user", http.StatusBadRequest)
+			return
 		}
+
 		json.NewEncoder(w).Encode(data)
 		return
 	}
-	*/
+
 }
 
 func RegisterHandler(w http.ResponseWriter, r *http.Request) {
@@ -537,63 +516,46 @@ func PostLoginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetFollowingMessages(w http.ResponseWriter, r *http.Request) {
-	/* TODO - use orm instead of query
 	db, err := connectDB()
+
 	if err != nil {
 		http.Error(w, "Database connection failed", http.StatusInternalServerError)
 		return
 	}
-	defer db.Close()
 
 	var userID = r.URL.Query().Get("userid")
-	rows, err := db.Query(`
-	SELECT  m.text, m.pub_date, u.username
-	FROM message m, user u
-	WHERE m.flagged = 0 AND u.user_id = m.author_id
-	AND (m.author_id = ? OR m.author_id IN (
-		SELECT who_id FROM follower WHERE whom_id = ?
-		))
-		ORDER BY m.pub_date DESC LIMIT ?`, userID, userID, PER_PAGE)
+
+	var messages []Message
+
+	err = db.Table("messages").
+		// Select("messages.text AS content, messages.pub_date AS pub_date, users.username AS user").
+		Joins("JOIN users ON users.user_id = messages.author_id").
+		Where("flagged = ? AND (author_id = ? OR author_id IN (SELECT who_id FROM followers WHERE whom_id = ?))", false, userID, userID).
+		Order("messages.pub_date DESC").
+		Limit(PER_PAGE).
+		Find(&messages).Error
 
 	if err != nil {
 		fmt.Println(err.Error())
 		http.Error(w, "Query execution failed", http.StatusInternalServerError)
 		return
 	}
-	defer rows.Close()
 
-	// Collect messages
-	var messages []APIMessage
-	for rows.Next() {
-		var msg APIMessage
-		if err := rows.Scan(
-			&msg.Content, &msg.PubDate, &msg.User,
-		); err != nil {
-			http.Error(w, "Error scanning rows", http.StatusInternalServerError)
-			return
-		}
-		messages = append(messages, msg)
-	}
-
-	if err := rows.Err(); err != nil {
-		http.Error(w, "Error iterating over rows", http.StatusInternalServerError)
-		return
-	}
-
-	var filteredMsgs []map[string]string
-
+	// Convert to APIMessage format
+	var apiMessages []APIMessage
 	for _, msg := range messages {
-		filteredMsg := map[string]string{
-			"content":  msg.Content,
-			"pub_date": msg.PubDate,
-			"user":     msg.User,
-		}
-		filteredMsgs = append(filteredMsgs, filteredMsg)
+		apiMessages = append(apiMessages, APIMessage{
+			Content: msg.Text,
+			PubDate: msg.PubDate,
+			User:    msg.Author.Username,
+		})
 	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(filteredMsgs)
-	*/
+	json.NewEncoder(w).Encode(apiMessages)
+
 }
+
 func main() {
 	// Create a new mux router
 	initDB()
