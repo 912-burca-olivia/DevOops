@@ -2,7 +2,7 @@ package main
 
 type APIMessage struct {
 	Content string `json:"content"`
-	PubDate string `json:"pub_date"`
+	PubDate int64  `json:"pub_date"`
 	User    string `json:"username"`
 }
 
@@ -18,7 +18,7 @@ type LoginRequest struct {
 }
 
 type User struct {
-	UserID    uint       `gorm:"column:user_id;primaryKey"`
+	UserID    uint       `gorm:"column:user_id;primaryKey;autoIncrement"`
 	Username  string     `gorm:"unique;not null" json:"username"`
 	Email     string     `gorm:"not null" json:"email"`
 	PWHash    string     `gorm:"not null" json:"pw_hash"`

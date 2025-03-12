@@ -189,7 +189,6 @@ func PublicTimelineHandler(w http.ResponseWriter, r *http.Request) {
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "session-name")
 
-
 	// If user is already in the cookies, just redirect
 	if session.Values["user_id"] != nil {
 		http.Redirect(w, r, "/", http.StatusFound)
@@ -257,7 +256,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 
 	// If user already in cookies, redirect
 	if session.Values["user_id"] != nil {
-		http.Redirect(w, r, "/", http.StatusFound) // TODO: Change to correct redirect
+		http.Redirect(w, r, "/public_timline", http.StatusFound) // TODO: Change to correct redirect
 		return
 	}
 
@@ -345,7 +344,7 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 func AddMessageHandler(w http.ResponseWriter, r *http.Request) {
 	// Get the current session
 	session, _ := store.Get(r, "session-name")
-	
+
 	// Check if the user is logged in
 	userID, ok := session.Values["user_id"].(int)
 	if !ok {

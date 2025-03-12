@@ -217,13 +217,25 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	UpdateLatest(r)
 
 	var data map[string]string
-	json.NewDecoder(r.Body).Decode(&data)
+
+	if r.Body == nil {
+		RespondJSONError(w, http.StatusBadRequest, "Empty request body")
+		return
+	}
+	defer r.Body.Close()
+
+	// JSON decoding errors properly
+	err = json.NewDecoder(r.Body).Decode(&data)
+	if err != nil {
+		log.Println("Error unmarshalling JSON:", err)
+		RespondJSONError(w, http.StatusBadRequest, "Invalid JSON format")
+		return
+	}
 
 	username := strings.TrimSpace(data["username"])
 	email := strings.TrimSpace(data["email"])
-	pwd := data["pw_hash"]
+	pwd := data["pwd"]
 
-	// Input validation
 	if username == "" {
 		RespondJSONError(w, http.StatusBadRequest, "You have to enter a username")
 		return
@@ -241,11 +253,9 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	var existing User
 	err = db.Where("username = ?", username).First(&existing).Error
 	if err == nil {
-		// Found a user with the same username
 		RespondJSONError(w, http.StatusBadRequest, "The username is already taken")
 		return
 	} else if err != nil && err != gorm.ErrRecordNotFound {
-		// Unexpected database error
 		RespondJSONError(w, http.StatusInternalServerError, "Failed to check existing user")
 		return
 	}
@@ -260,8 +270,10 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Successfully created, no content to return
-	w.WriteHeader(http.StatusNoContent)
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "User registered successfully",
+	})
 }
 
 func GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
@@ -276,7 +288,7 @@ func GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	err = db.Table("messages").
 		Select("messages.text AS content, messages.pub_date AS pub_date, users.username AS user").
 		Joins("JOIN users ON messages.author_id = users.user_id").
-		Where("messages.flagged = 0").
+		Where("messages.flagged = false").
 		Order("messages.pub_date DESC").
 		Limit(GetNumberHandler(r)).
 		Find(&messages).Error
@@ -314,28 +326,21 @@ func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Retrieve this user's messages without an extra join (we already know the username)
-	var msgs []Message
-	err = db.Where("flagged = 0 AND author_id = ?", userID).
-		Order("pub_date DESC").
+	var messages []APIMessage
+	err = db.Table("messages").
+		Select("messages.text AS content, messages.pub_date AS pub_date, users.username AS user").
+		Joins("JOIN users ON messages.author_id = users.user_id").
+		Where("messages.flagged = false AND users.username = ?", username).
+		Order("messages.pub_date DESC").
 		Limit(GetNumberHandler(r)).
-		Find(&msgs).Error
+		Find(&messages).Error
 	if err != nil {
 		RespondJSONError(w, http.StatusInternalServerError, "Failed to retrieve messages")
 		return
 	}
-	// Transform to APIMessage output
-	apiMessages := make([]APIMessage, 0, len(msgs))
-	for _, m := range msgs {
-		apiMessages = append(apiMessages, APIMessage{
-			Content: m.Text,
-			PubDate: FormatDateTime(m.PubDate),
-			User:    username,
-		})
-	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(apiMessages)
+	json.NewEncoder(w).Encode(messages)
 }
 
 func POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
@@ -460,13 +465,11 @@ func GETFollowingHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func PostLoginHandler(w http.ResponseWriter, r *http.Request) {
-	/* TODO - use orm instead of query
 	db, err := connectDB()
 	if err != nil {
 		http.Error(w, "Database connection failed", http.StatusInternalServerError)
 		return
 	}
-	defer db.Close()
 
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -475,27 +478,25 @@ func PostLoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if user exists
-	var foundUser LoginRequest
-	query := `	SELECT user.username, user.pw_hash
-		  		FROM user
-		  		WHERE user.username = ?`
-	err = db.QueryRow(query, req.Username).Scan(&foundUser.Username, &foundUser.Password)
-	err = db.QueryRow(query, req.Username).Scan(&foundUser.Username, &foundUser.Password)
-	if err != nil {
-		http.Error(w, "Invalid credentials", http.StatusNotFound)
+	var foundUser User
+	result := db.Debug().Where("username = ?", req.Username).First(&foundUser) //db.Where("username = ?", req.Username).First(&foundUser)
+	if result.Error == gorm.ErrRecordNotFound {
+		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		return
+	} else if result.Error != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
 
 	// At this point we know that a user exists
 	// Check the password hash against the one found in the db
-	if req.Password == foundUser.Password {
+	if req.Password == foundUser.PWHash {
 		w.WriteHeader(http.StatusOK)
 	} else {
 
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
-	*/
 }
 
 func GetFollowingMessages(w http.ResponseWriter, r *http.Request) {
