@@ -18,7 +18,7 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-const DATABASE = "minitwit.db"
+const DATABASE = "../minitwit.db"
 const PER_PAGE = 30
 
 var store = sessions.NewCookieStore([]byte("SESSION_KEY"))
@@ -401,35 +401,49 @@ func POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func GETUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
-	/* TODO - use orm instead of query
 	db, err := connectDB()
 	if err != nil {
 		http.Error(w, "Database connection failed", http.StatusInternalServerError)
 		return
 	}
-	defer db.Close()
 
 	userID := r.URL.Query().Get("user_id")
 	username := r.URL.Query().Get("username")
-	var userDetailsRow *sql.Row
-	query := `SELECT user_id, username, email FROM user WHERE `
 
+	var user User
 	if userID != "" {
-		query += "user_id = ?"
-		userDetailsRow = db.QueryRow(query, userID)
+		result := db.Where("user_id = ?", userID).First(&user)
+		if result.Error != nil {
+			if result.Error == gorm.ErrRecordNotFound {
+				http.Error(w, "User not found", http.StatusNotFound)
+			} else {
+				http.Error(w, "Database error: "+result.Error.Error(), http.StatusInternalServerError)
+			}
+			return
+		}
+	} else if username != "" {
+		result := db.Where("username = ?", username).First(&user)
+		if result.Error != nil {
+			if result.Error == gorm.ErrRecordNotFound {
+				http.Error(w, "User not found", http.StatusNotFound)
+			} else {
+				http.Error(w, "Database error: "+result.Error.Error(), http.StatusInternalServerError)
+			}
+			return
+		}
 	} else {
-		query += "username = ?"
-		userDetailsRow = db.QueryRow(query, username)
-	}
-	var userdetails UserDetails
-	err = userDetailsRow.Scan(&userdetails.UserID, &userdetails.Username, &userdetails.Email)
-	if err != nil {
-		fmt.Print(err.Error())
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		// If neither user_id nor username is provided, return an error
+		http.Error(w, "Missing user_id or username query parameter", http.StatusBadRequest)
 		return
 	}
-	json.NewEncoder(w).Encode(userdetails)
-	*/
+
+	userDetails := UserDetails{
+		UserID:   user.UserID,
+		Username: user.Username,
+		Email:    user.Email,
+	}
+
+	json.NewEncoder(w).Encode(userDetails)
 }
 
 func GETFollowingHandler(w http.ResponseWriter, r *http.Request) {
