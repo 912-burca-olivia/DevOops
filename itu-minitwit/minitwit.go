@@ -412,11 +412,11 @@ func FollowHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Error marshalling JSON:", err)
 		return
 	}
-	if resp.StatusCode != 204 {
+	if resp.StatusCode != 200 {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
-	session.AddFlash("You are now following " + vars["username"]) // TODO: Don't know if working
+	session.AddFlash("You are now following " + vars["username"])
 	session.Save(r, w)
 	http.Redirect(w, r, fmt.Sprintf("/user_timeline/%s", vars["username"]), http.StatusFound)
 
@@ -449,7 +449,7 @@ func UnfollowHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Error marshalling JSON:", err)
 		return
 	}
-	if resp.StatusCode != 204 {
+	if resp.StatusCode != 200 {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}

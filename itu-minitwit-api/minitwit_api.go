@@ -22,8 +22,6 @@ const PER_PAGE = 30
 
 var store = sessions.NewCookieStore([]byte("SESSION_KEY"))
 
-//const PER_PAGE = 30 //useful for the html template but not for the API implementation
-
 func connectDB() (*gorm.DB, error) {
 	databasePath := os.Getenv("DATABASE")
 	if databasePath == "" {
@@ -90,14 +88,12 @@ func GetNumberHandler(r *http.Request) int {
 }
 
 func GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
-	/* TODO - use orm instead of query
 
 	db, err := connectDB()
 	if err != nil {
 		http.Error(w, "Database connection failed", http.StatusInternalServerError)
 		return
 	}
-	defer db.Close()
 
 	//number of requested followers
 	rowNums := GetNumberHandler(r)
@@ -107,40 +103,32 @@ func GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
 
 	userID, _ := getUserID(db, vars["username"])
 
-	if userID == -1 {
+	if userID == 0 {
 		http.Error(w, "Cannot find user", http.StatusNotFound)
 		return
 	}
 
 	// Query all followers
-	query := `
-				SELECT user.username FROM user
-				INNER JOIN follower ON follower.whom_id=user.user_id
-				WHERE follower.who_id=?
-				LIMIT ?
-			`
 
-	rows, err := db.Query(query, userID, rowNums)
+	var followers []string
+
+	err = db.
+		Table("users").
+		Select("users.username").
+		Joins("INNER JOIN followers ON followers.whom_id = users.user_id").
+		Where("followers.who_id = ?", userID).
+		Limit(rowNums).
+		Pluck("username", &followers).
+		Error
+
 	if err != nil {
 		http.Error(w, "Query execution failed", http.StatusInternalServerError)
 		return
 	}
-	defer rows.Close()
-
-	// Collect followers
-	var followers []string
-	for rows.Next() {
-		var follower string
-		if err := rows.Scan(&follower); err != nil {
-			http.Error(w, "Error scanning rows", http.StatusInternalServerError)
-			return
-		}
-		followers = append(followers, follower)
-	}
 
 	response := map[string][]string{"follows": followers}
 	json.NewEncoder(w).Encode(response)
-	*/
+
 }
 
 func POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
@@ -148,7 +136,6 @@ func POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 	UpdateLatest(r)
 
 	db, err := connectDB()
-	db.Debug()
 
 	if err != nil {
 		http.Error(w, "Database connection failed", http.StatusInternalServerError)
@@ -334,7 +321,19 @@ func GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(w).Encode(messages)
+	var filteredMsgs []map[string]string
+
+	for _, msg := range messages {
+		filteredMsg := map[string]string{
+			"content":  msg.Content,
+			"pub_date": msg.PubDate,
+			"user":     msg.User,
+		}
+		filteredMsgs = append(filteredMsgs, filteredMsg)
+	}
+
+	json.NewEncoder(w).Encode(filteredMsgs)
+
 }
 
 func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
@@ -373,7 +372,18 @@ func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(w).Encode(messages)
+	var filteredMsgs []map[string]string
+
+	for _, msg := range messages {
+		filteredMsg := map[string]string{
+			"content":  msg.Content,
+			"pub_date": msg.PubDate,
+			"user":     msg.User,
+		}
+		filteredMsgs = append(filteredMsgs, filteredMsg)
+	}
+
+	json.NewEncoder(w).Encode(filteredMsgs)
 }
 
 func POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
@@ -478,30 +488,16 @@ func GETFollowingHandler(w http.ResponseWriter, r *http.Request) {
 	whoUsernameID, _ := getUserID(db, whoUsername)
 	whomUsernameID, _ := getUserID(db, whomUsername)
 
-	var isFollowing bool
-	result := db.Select("whoUsername = ?", whoUsernameID).Where("whomUsername = ?", whomUsernameID).First(&isFollowing)
-	if result.Error != nil {
-		if result.Error == gorm.ErrRecordNotFound {
-			http.Error(w, "User is not following", http.StatusNotFound)
-			return //what do we return here? used to be only fmt.Println("User is not following")
-		} else {
-			http.Error(w, "Database connection failed", http.StatusInternalServerError)
-		}
+	var isFollowing bool = true
+	var follower Follower
+	err = db.Model(&Follower{}).
+		Where("who_id = ? AND whom_id = ?", whoUsernameID, whomUsernameID).
+		First(&follower).Error
+
+	if err != nil {
+		isFollowing = false // Default to false if no rows found or any error occurs
 	}
-	/*err = db.QueryRow(
-	      `select 1
-	      from follower
-	      where follower.who_id = ? and follower.whom_id = ?`,
-	      whoUsernameID,
-	      whomUsernameID).
-	      Scan(&isFollowing)
-	  if err != nil {
-	      if err == sql.ErrNoRows {
-	          fmt.Println("User is not following")
-	      } else {
-	          http.Error(w, "Database connection failed", http.StatusInternalServerError)
-	      }
-	  }*/
+
 	json.NewEncoder(w).Encode(isFollowing)
 
 }
@@ -551,10 +547,10 @@ func GetFollowingMessages(w http.ResponseWriter, r *http.Request) {
 
 	var userID = r.URL.Query().Get("userid")
 
-	var messages []Message
+	var messages []APIMessage
 
 	err = db.Table("messages").
-		// Select("messages.text AS content, messages.pub_date AS pub_date, users.username AS user").
+		Select("messages.text AS content, messages.pub_date AS pub_date, users.username AS user").
 		Joins("JOIN users ON users.user_id = messages.author_id").
 		Where("flagged = ? AND (author_id = ? OR author_id IN (SELECT who_id FROM followers WHERE whom_id = ?))", false, userID, userID).
 		Order("messages.pub_date DESC").
@@ -567,18 +563,21 @@ func GetFollowingMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Convert to APIMessage format
-	var apiMessages []APIMessage
+	// Convert to Json app Message format
+
+	var filteredMsgs []map[string]string
+
 	for _, msg := range messages {
-		apiMessages = append(apiMessages, APIMessage{
-			Content: msg.Text,
-			PubDate: msg.PubDate,
-			User:    msg.Author.Username,
-		})
+		filteredMsg := map[string]string{
+			"content":  msg.Content,
+			"pub_date": msg.PubDate,
+			"user":     msg.User,
+		}
+		filteredMsgs = append(filteredMsgs, filteredMsg)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(apiMessages)
+	json.NewEncoder(w).Encode(filteredMsgs)
 
 }
 
