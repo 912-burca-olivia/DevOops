@@ -17,19 +17,16 @@ func Error() string {
 }
 
 // getUserID retrieves the user_id for a given username.
-func getUserID(db *gorm.DB, username string) (int, error) {
-	/* TODO - use orm instead of query
-	var userID int
-	err := db.QueryRow("SELECT user_id FROM user WHERE username = ?", username).Scan(&userID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return -1, nil // Return -1 if no user is found
+func getUserID(db *gorm.DB, username string) (uint, error) {
+	var user User
+	result := db.Select("user_id").Where("username = ?", username).First(&user)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return 0, nil // user not found
 		}
-		return -999, err // Return the error
+		return 0, result.Error
 	}
-	return userID, nil // Return userID if the user exists
-	*/
-	return -1, nil // remove this when the method is done
+	return user.UserID, nil
 }
 
 func initDB() {

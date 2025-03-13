@@ -208,253 +208,216 @@ func POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func RegisterHandler(w http.ResponseWriter, r *http.Request) {
-	/* TODO - use orm instead of query
-	// Connect to the database
 	db, err := connectDB()
 	if err != nil {
-		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":    "500",
+			"error_msg": "Database connection failed",
+		})
 		return
 	}
 
-	defer db.Close()
+	UpdateLatest(r)
+	w.Header().Set("Content-Type", "application/json")
 
-	UpdateLatest(r) // Updater the latest parameter
-
-	var error = ""
-
-	var data map[string]interface{}
-	json.NewDecoder(r.Body).Decode(&data)
-
-	username := data["username"].(string)
-	email := data["email"].(string)
-	password := data["pwd"].(string)
-	// Validate input fields
-	if username == "" {
-		error = "You have to enter a username"
-	} else if email == "" {
-		error = "You have to enter a valid email address"
-	} else if !strings.Contains(email, "@") {
-		error = "You have to enter a valid email address"
-	} else if password == "" {
-		error = "You have to enter a password"
-	} else {
-		// Check if the username is already taken
-		userId, _ := getUserID(db, username)
-
-		if userId != -1 {
-			error = "The username is already taken"
-		} else {
-			// Insert new user into the database
-			_, err := db.Exec("INSERT INTO user (username, email, pw_hash) VALUES (?, ?, ?)",
-				username, email, password,
-			)
-			if err != nil {
-				log.Println("Error inserting user:", err)
-				http.Error(w, "Failed to register user", http.StatusInternalServerError)
-				return
-			}
-		}
-	}
-	var status int
-
-	if error == "" {
-		w.WriteHeader(http.StatusNoContent)
-		status = 200
-	} else {
+	if r.Body == nil {
 		w.WriteHeader(http.StatusBadRequest)
-		status = 400
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":    "400",
+			"error_msg": "Empty request body",
+		})
+		return
 	}
-	response := map[string]interface{}{
-		"status":    status,
-		"error_msg": error,
+	defer r.Body.Close()
+
+	var data map[string]string
+	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":    "400",
+			"error_msg": "Invalid JSON format",
+		})
+		return
 	}
-	json.NewEncoder(w).Encode(response)
-	*/
+
+	// Extract and validate required fields
+	username, email, pwd := strings.TrimSpace(data["username"]), strings.TrimSpace(data["email"]), data["pwd"]
+
+	if username == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":    "400",
+			"error_msg": "You have to enter a username",
+		})
+		return
+	}
+	if email == "" || !strings.Contains(email, "@") {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":    "400",
+			"error_msg": "You have to enter a valid email address",
+		})
+		return
+	}
+	if pwd == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":    "400",
+			"error_msg": "You have to enter a password",
+		})
+		return
+	}
+
+	// Check if the username already exists
+	var existing User
+	if err := db.Where("username = ?", username).First(&existing).Error; err == nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":    "400",
+			"error_msg": "The username is already taken",
+		})
+		return
+	} else if err != gorm.ErrRecordNotFound {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":    "500",
+			"error_msg": "Database error while checking username",
+		})
+		return
+	}
+
+	// Create and save new user
+	newUser := User{Username: username, Email: email, PWHash: pwd}
+	if err := db.Create(&newUser).Error; err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":    "500",
+			"error_msg": "Failed to register user",
+		})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
-	/* TODO - use orm instead of query
-		// Connect to the database
-		db, err := connectDB()
-		if err != nil {
-			http.Error(w, "Database connection failed", http.StatusInternalServerError)
-			return
-		}
-		defer db.Close()
-
-		//number of requested messages
-		rowNums := GetNumberHandler(r)
-		//update latest param
-		UpdateLatest(r)
-
-		query := `
-			SELECT  message.text, message.pub_date, user.username
-			FROM message, user
-	        WHERE message.flagged = 0 AND message.author_id = user.user_id
-	        ORDER BY message.pub_date DESC LIMIT ?`
-
-		rows, err := db.Query(query, rowNums)
-		if err != nil {
-			http.Error(w, "Query execution failed", http.StatusInternalServerError)
-			return
-		}
-		defer rows.Close()
-
-		// Collect messages
-		var messages []APIMessage
-		for rows.Next() {
-			var msg APIMessage
-			if err := rows.Scan(
-				&msg.Content, &msg.PubDate, &msg.User,
-			); err != nil {
-				http.Error(w, "Error scanning rows", http.StatusInternalServerError)
-				return
-			}
-			messages = append(messages, msg)
-		}
-
-		if err := rows.Err(); err != nil {
-			http.Error(w, "Error iterating over rows", http.StatusInternalServerError)
-			return
-		}
-
-		var filteredMsgs []map[string]string
-
-		for _, msg := range messages {
-			filteredMsg := map[string]string{
-				"content":  msg.Content,
-				"pub_date": msg.PubDate,
-				"user":     msg.User,
-			}
-			filteredMsgs = append(filteredMsgs, filteredMsg)
-		}
-
-		//response := map[string][]Message{"messages": messages}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(filteredMsgs)
-	*/
-}
-
-func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
-	/* TODO - use orm instead of query
-	// Connect to the database
 	db, err := connectDB()
 	if err != nil {
-		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"status": "error", "error_msg": "Database connection failed"})
 		return
 	}
-	defer db.Close()
-
-	//update latest param
 	UpdateLatest(r)
-	//number of requested messages
-	rowNums := GetNumberHandler(r)
 
-	query := `	SELECT  message.text, message.pub_date, user.username
-				FROM message, user
-				WHERE message.flagged = 0 AND
-				user.user_id = message.author_id AND user.user_id = ?
-				ORDER BY message.pub_date DESC LIMIT ?`
-
-	vars := mux.Vars(r)
-
-	userID, _ := getUserID(db, vars["username"])
-
-	if userID == -1 {
-		http.Error(w, "Cannot find user", http.StatusNotFound)
-		return
-	}
-
-	rows, err := db.Query(query, userID, rowNums)
-	if err != nil {
-		http.Error(w, "Query execution failed", http.StatusInternalServerError)
-
-		return
-	}
-	defer rows.Close()
-
-	// Collect USER messages
+	// Retrieve all non-flagged messages
 	var messages []APIMessage
-	for rows.Next() {
-		var msg APIMessage
-		if err := rows.Scan(
-			&msg.Content, &msg.PubDate, &msg.User,
-		); err != nil {
-			fmt.Println(err.Error())
-			http.Error(w, "Error scanning rows", http.StatusInternalServerError)
-			return
-		}
-		messages = append(messages, msg)
-	}
+	err = db.Table("messages").
+		Select("messages.text AS content, messages.pub_date AS pub_date, users.username AS user").
+		Joins("JOIN users ON messages.author_id = users.user_id").
+		Where("messages.flagged = false").
+		Order("messages.pub_date DESC").
+		Limit(GetNumberHandler(r)).
+		Find(&messages).Error
 
-	if err := rows.Err(); err != nil {
-		http.Error(w, "Error iterating over rows", http.StatusInternalServerError)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"status": "error", "error_msg": "Failed to retrieve messages"})
 		return
-	}
-
-	var filteredMsgs []map[string]string
-
-	for _, msg := range messages {
-		filteredMsg := map[string]string{
-			"content":  msg.Content,
-			"pub_date": msg.PubDate,
-			"user":     msg.User,
-		}
-		filteredMsgs = append(filteredMsgs, filteredMsg)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(filteredMsgs)
-	*/
+	if len(messages) == 0 {
+		w.Write([]byte("[]"))
+		return
+	}
+
+	json.NewEncoder(w).Encode(messages)
+}
+
+func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
+	db, err := connectDB()
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"status": "error", "error_msg": "Database connection failed"})
+		return
+	}
+	UpdateLatest(r)
+
+	username := mux.Vars(r)["username"]
+
+	// Retrieve messages
+	var messages []APIMessage
+	err = db.Table("messages").
+		Select("messages.text AS content, messages.pub_date AS pub_date, users.username AS user").
+		Joins("JOIN users ON messages.author_id = users.user_id").
+		Where("messages.flagged = false AND users.username = ?", username).
+		Order("messages.pub_date DESC").
+		Limit(GetNumberHandler(r)).
+		Find(&messages).Error
+
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"status": "error", "error_msg": "Failed to retrieve messages"})
+		return
+	}
+
+	// Ensure empty response is always a valid JSON array
+	w.Header().Set("Content-Type", "application/json")
+	if len(messages) == 0 {
+		w.Write([]byte("[]"))
+		return
+	}
+
+	json.NewEncoder(w).Encode(messages)
 }
 
 func POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
-	/* TODO - use orm instead of query
-	UpdateLatest(r)
-
-	// if NotReqFromSimulator(w, r) {
-	// 	return
-	// }
-
 	db, err := connectDB()
 	if err != nil {
-		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "application/json")
+		http.Error(w, `{"status":500, "error_msg":"Database connection failed"}`, http.StatusInternalServerError)
+		return
+	}
+	UpdateLatest(r)
+
+	username := mux.Vars(r)["username"]
+
+	// Get user ID
+	userID, err := getUserID(db, username)
+	if err != nil || userID == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		http.Error(w, `{"status":404, "error_msg":"User not found"}`, http.StatusNotFound)
 		return
 	}
 
-	defer db.Close()
-
-	vars := mux.Vars(r)
-
-	userID, _ := getUserID(db, vars["username"])
-	if userID == -1 {
-		fmt.Printf("Cannot find user: %s", vars["username"])
-		http.Error(w, "Cannot find user", http.StatusNotFound)
+	// Read and decode request body
+	var data struct {
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&data); err != nil || strings.TrimSpace(data.Content) == "" {
+		w.Header().Set("Content-Type", "application/json")
+		http.Error(w, `{"status":400, "error_msg":"Invalid or missing content"}`, http.StatusBadRequest)
 		return
 	}
 
-	var data map[string]interface{}
-	json.NewDecoder(r.Body).Decode(&data)
-
-	content := data["content"].(string)
-
-	query := `INSERT INTO message (author_id, text, pub_date, flagged) VALUES (?, ?, ?, 0)`
-	_, err = db.Exec(query, userID, content, FormatDateTime(time.Now().Unix()))
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		data = map[string]interface{}{
-			"status": http.StatusBadRequest,
-			"res":    err.Error(),
-		}
-	} else {
-		w.WriteHeader(http.StatusNoContent)
-		data = map[string]interface{}{
-			"status": http.StatusNoContent,
-			"res":    "",
-		}
+	// Create and save message
+	message := Message{
+		AuthorID: userID,
+		Text:     data.Content,
+		PubDate:  FormatDateTime(time.Now().Unix()),
+		Flagged:  false,
 	}
-	json.NewEncoder(w).Encode(data)
-	*/
+	if err := db.Create(&message).Error; err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		http.Error(w, `{"status":500, "error_msg":"Failed to create message"}`, http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func GETUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
