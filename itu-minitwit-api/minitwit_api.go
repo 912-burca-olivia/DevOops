@@ -524,7 +524,7 @@ func GETUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(userDetails)
 }
 
-// GWEN TODO: checks if person logged in is following the person whose page we looking at
+// checks if person logged in is following the person whose page we looking at
 func GETFollowingHandler(w http.ResponseWriter, r *http.Request) {
 
 	db, err := connectDB()
