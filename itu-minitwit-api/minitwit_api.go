@@ -504,35 +504,43 @@ func GETUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func GETFollowingHandler(w http.ResponseWriter, r *http.Request) {
-	/* TODO - use orm instead of query
 	db, err := connectDB()
 	if err != nil {
 		http.Error(w, "Database connection failed", http.StatusInternalServerError)
 		return
 	}
-	defer db.Close()
 
 	whoUsername := r.URL.Query().Get("whoUsername")
 	whomUsername := r.URL.Query().Get("whomUsername")
 	whoUsernameID, _ := getUserID(db, whoUsername)
 	whomUsernameID, _ := getUserID(db, whomUsername)
+
 	var isFollowing bool
-	err = db.QueryRow(
-		`select 1
-		from follower
-		where follower.who_id = ? and follower.whom_id = ?`,
-		whoUsernameID,
-		whomUsernameID).
-		Scan(&isFollowing)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			fmt.Println("User is not following")
+	result := db.Select("whoUsername = ?", whoUsernameID).Where("whomUsername = ?", whomUsernameID).First(&isFollowing)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			http.Error(w, "User is not following", http.StatusNotFound)
+			return //what do we return here? used to be only fmt.Println("User is not following")
 		} else {
 			http.Error(w, "Database connection failed", http.StatusInternalServerError)
 		}
 	}
+	/*err = db.QueryRow(
+	      `select 1
+	      from follower
+	      where follower.who_id = ? and follower.whom_id = ?`,
+	      whoUsernameID,
+	      whomUsernameID).
+	      Scan(&isFollowing)
+	  if err != nil {
+	      if err == sql.ErrNoRows {
+	          fmt.Println("User is not following")
+	      } else {
+	          http.Error(w, "Database connection failed", http.StatusInternalServerError)
+	      }
+	  }*/
 	json.NewEncoder(w).Encode(isFollowing)
-	*/
+
 }
 
 func PostLoginHandler(w http.ResponseWriter, r *http.Request) {
