@@ -197,105 +197,70 @@ func POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	db, err := connectDB()
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{
-			"status":    "500",
-			"error_msg": "Database connection failed",
-		})
+		http.Error(w, "Database connection failed", http.StatusInternalServerError)
 		return
 	}
 
-	UpdateLatest(r)
-	w.Header().Set("Content-Type", "application/json")
+	UpdateLatest(r) // Updater the latest parameter
 
-	if r.Body == nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{
-			"status":    "400",
-			"error_msg": "Empty request body",
-		})
-		return
-	}
-	defer r.Body.Close()
+	var error = ""
 
-	var data map[string]string
-	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{
-			"status":    "400",
-			"error_msg": "Invalid JSON format",
-		})
-		return
-	}
+	var data map[string]interface{}
+	json.NewDecoder(r.Body).Decode(&data)
 
-	// Extract and validate required fields
-	username, email, pwd := strings.TrimSpace(data["username"]), strings.TrimSpace(data["email"]), data["pwd"]
-
+	username := data["username"].(string)
+	email := data["email"].(string)
+	password := data["pwd"].(string)
+	// Validate input fields
 	if username == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{
-			"status":    "400",
-			"error_msg": "You have to enter a username",
-		})
-		return
-	}
-	if email == "" || !strings.Contains(email, "@") {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{
-			"status":    "400",
-			"error_msg": "You have to enter a valid email address",
-		})
-		return
-	}
-	if pwd == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{
-			"status":    "400",
-			"error_msg": "You have to enter a password",
-		})
-		return
-	}
+		error = "You have to enter a username"
+	} else if email == "" {
+		error = "You have to enter a valid email address"
+	} else if !strings.Contains(email, "@") {
+		error = "You have to enter a valid email address"
+	} else if password == "" {
+		error = "You have to enter a password"
+	} else {
+		// Check if the username is already taken
+		userId, _ := getUserID(db, username)
 
-	// Check if the username already exists
-	var existing User
-	if err := db.Where("username = ?", username).First(&existing).Error; err == nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{
-			"status":    "400",
-			"error_msg": "The username is already taken",
-		})
-		return
-	} else if err != gorm.ErrRecordNotFound {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{
-			"status":    "500",
-			"error_msg": "Database error while checking username",
-		})
-		return
+		if userId != 0 {
+			error = "The username is already taken"
+		} else {
+			// Insert new user into the database
+			newUser := User{Username: username, Email: email, PWHash: password}
+			err := db.Create(&newUser).Error
+			if err != nil {
+				log.Println("Error inserting user:", err)
+				http.Error(w, "Failed to register user", http.StatusInternalServerError)
+				return
+			}
+		}
 	}
+	var status int
 
-	// Create and save new user
-	newUser := User{Username: username, Email: email, PWHash: pwd}
-	if err := db.Create(&newUser).Error; err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{
-			"status":    "500",
-			"error_msg": "Failed to register user",
-		})
-		return
+	if error == "" {
+		w.WriteHeader(http.StatusNoContent)
+		status = 200
+	} else {
+		w.WriteHeader(http.StatusBadRequest)
+		status = 400
 	}
-	w.WriteHeader(http.StatusNoContent)
+	response := map[string]interface{}{
+		"status":    status,
+		"error_msg": error,
+	}
+	json.NewEncoder(w).Encode(response)
 }
 
 func GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
+	// Connect to the database
 	db, err := connectDB()
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"status": "error", "error_msg": "Database connection failed"})
+		http.Error(w, "Database connection failed", http.StatusInternalServerError)
 		return
 	}
+
 	UpdateLatest(r)
 
 	// Retrieve all non-flagged messages
@@ -309,9 +274,7 @@ func GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 		Find(&messages).Error
 
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"status": "error", "error_msg": "Failed to retrieve messages"})
+		http.Error(w, "Query execution failed", http.StatusInternalServerError)
 		return
 	}
 
@@ -333,35 +296,39 @@ func GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(filteredMsgs)
-
 }
 
 func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
+	// Connect to the database
 	db, err := connectDB()
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"status": "error", "error_msg": "Database connection failed"})
+		http.Error(w, "Database connection failed", http.StatusInternalServerError)
 		return
 	}
 	UpdateLatest(r)
 
 	username := mux.Vars(r)["username"]
 
+	// Get user ID
+	userID, err := getUserID(db, username)
+	if err != nil || userID == 0 {
+		fmt.Printf("Cannot find user: %s", username)
+		http.Error(w, "Cannot find user", http.StatusNotFound)
+		return
+	}
+
 	// Retrieve messages
 	var messages []APIMessage
 	err = db.Table("messages").
 		Select("messages.text AS content, messages.pub_date AS pub_date, users.username AS user").
 		Joins("JOIN users ON messages.author_id = users.user_id").
-		Where("messages.flagged = false AND users.username = ?", username).
+		Where("messages.flagged = false AND users.user_id = ?", userID).
 		Order("messages.pub_date DESC").
 		Limit(GetNumberHandler(r)).
 		Find(&messages).Error
 
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"status": "error", "error_msg": "Failed to retrieve messages"})
+		http.Error(w, "Query execution failed", http.StatusInternalServerError)
 		return
 	}
 
@@ -383,14 +350,14 @@ func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 		filteredMsgs = append(filteredMsgs, filteredMsg)
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(filteredMsgs)
 }
 
 func POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	db, err := connectDB()
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		http.Error(w, `{"status":500, "error_msg":"Database connection failed"}`, http.StatusInternalServerError)
+		http.Error(w, "Database connection failed", http.StatusInternalServerError)
 		return
 	}
 	UpdateLatest(r)
@@ -400,8 +367,8 @@ func POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	// Get user ID
 	userID, err := getUserID(db, username)
 	if err != nil || userID == 0 {
-		w.Header().Set("Content-Type", "application/json")
-		http.Error(w, `{"status":404, "error_msg":"User not found"}`, http.StatusNotFound)
+		fmt.Printf("Cannot find user: %s", username)
+		http.Error(w, "Cannot find user", http.StatusNotFound)
 		return
 	}
 
@@ -422,12 +389,23 @@ func POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 		PubDate:  FormatDateTime(time.Now().Unix()),
 		Flagged:  false,
 	}
+
+	// Insert into DB
 	if err := db.Create(&message).Error; err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		http.Error(w, `{"status":500, "error_msg":"Failed to create message"}`, http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status": http.StatusBadRequest,
+			"res":    err.Error(),
+		})
 		return
 	}
+
+	// Successful response
 	w.WriteHeader(http.StatusNoContent)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status": http.StatusNoContent,
+		"res":    "",
+	})
 }
 
 func GETUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
