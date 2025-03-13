@@ -9,7 +9,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      ENDPOINT: "http://172.17.0.1:9090"
+      ENDPOINT: "http://host.docker.internal:9080"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080"]
       interval: 10s
@@ -23,7 +23,7 @@ services:
       dockerfile: local/Dockerfile
     container_name: minitwit_api
     ports:
-      - "9090:9090"
+      - "9080:9080"
     volumes:
       - ./minitwit.db:/app/minitwit.db
     environment:
@@ -34,3 +34,28 @@ services:
       retries: 5
       start_period: 10s
       timeout: 5s
+    networks:
+      - monitoring
+
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command: --config.file=/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"  # Change Prometheus port to 7070
+    networks:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    networks:
+      - monitoring
+
+networks:
+  monitoring:
+    driver: bridge

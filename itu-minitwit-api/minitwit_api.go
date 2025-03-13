@@ -14,6 +14,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 const DATABASE = "minitwit.db"
@@ -25,6 +27,27 @@ var store = sessions.NewCookieStore([]byte("SESSION_KEY"))
 // var db *sql.DB
 
 // connectDB opens a connection to the SQLite3 database
+
+func InitMetrics() *Metrics {
+	m := &Metrics{
+		SuccessfulRequests: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "http_requests_successful_total",
+				Help: "Total number of successful (2xx) HTTP requests",
+			},
+			[]string{"path"},
+		),
+	}
+
+	prometheus.MustRegister(m.SuccessfulRequests)
+
+	return m
+}
+
+type API struct {
+	metrics *Metrics
+}
+
 func connectDB() (*sql.DB, error) {
 	databasePath := os.Getenv("DATABASE")
 	if databasePath == "" {
@@ -282,8 +305,9 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-func GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
+func (api *API) GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	// Connect to the database
+	api.metrics.SuccessfulRequests.WithLabelValues(r.URL.Path).Inc()
 	db, err := connectDB()
 	if err != nil {
 		http.Error(w, "Database connection failed", http.StatusInternalServerError)
@@ -339,6 +363,7 @@ func GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//response := map[string][]Message{"messages": messages}
+	
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(filteredMsgs)
 }
@@ -540,7 +565,7 @@ func PostLoginHandler(w http.ResponseWriter, r *http.Request) {
 	query := `	SELECT user.username, user.pw_hash
 		  		FROM user
 		  		WHERE user.username = ?`
-	err = db.QueryRow(query, req.Username).Scan(&foundUser.Username, &foundUser.Password)
+	//err = db.QueryRow(query, req.Username).Scan(&foundUser.Username, &foundUser.Password)
 	err = db.QueryRow(query, req.Username).Scan(&foundUser.Username, &foundUser.Password)
 	if err != nil {
 		http.Error(w, "Invalid credentials", http.StatusNotFound)
@@ -623,15 +648,17 @@ func main() {
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
 	}
-
+	metrics := InitMetrics() // Initialize metrics
+	api := &API{metrics: metrics} // Initialize API with metrics
 	r := mux.NewRouter()
 
 	// Define the routes and their handlers
+	r.Handle("/metrics", promhttp.Handler())
 	r.HandleFunc("/latest", GETLatestHandler).Methods("GET")
 	r.HandleFunc("/register", RegisterHandler).Methods("POST")
 	r.HandleFunc("/fllws/{username}", POSTFollowerHandler).Methods("POST")
 	r.HandleFunc("/fllws/{username}", GETFollowerHandler).Methods("GET")
-	r.HandleFunc("/msgs", GETAllMessagesHandler).Methods("GET")
+	r.HandleFunc("/msgs", api.GETAllMessagesHandler).Methods("GET")
 	r.HandleFunc("/msgs/{username}", GETUserMessagesHandler).Methods("GET")
 	r.HandleFunc("/msgs/{username}", POSTMessagesHandler).Methods("POST")
 	r.HandleFunc("/followingmsgs", GetFollowingMessages).Methods("GET")
@@ -640,5 +667,5 @@ func main() {
 	r.HandleFunc("/login", PostLoginHandler).Methods("POST")
 	// Start the server on port 9090
 	fmt.Println("Server starting on http://localhost:9090")
-	log.Fatal(http.ListenAndServe(":9090", r))
+	log.Fatal(http.ListenAndServe(":9080", r))
 }
