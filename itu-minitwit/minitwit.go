@@ -189,7 +189,6 @@ func PublicTimelineHandler(w http.ResponseWriter, r *http.Request) {
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "session-name")
 
-
 	// If user is already in the cookies, just redirect
 	if session.Values["user_id"] != nil {
 		http.Redirect(w, r, "/", http.StatusFound)
@@ -345,7 +344,7 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 func AddMessageHandler(w http.ResponseWriter, r *http.Request) {
 	// Get the current session
 	session, _ := store.Get(r, "session-name")
-	
+
 	// Check if the user is logged in
 	userID, ok := session.Values["user_id"].(int)
 	if !ok {
@@ -413,11 +412,11 @@ func FollowHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Error marshalling JSON:", err)
 		return
 	}
-	if resp.StatusCode != 204 {
+	if resp.StatusCode != 200 {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
-	session.AddFlash("You are now following " + vars["username"]) // TODO: Don't know if working
+	session.AddFlash("You are now following " + vars["username"])
 	session.Save(r, w)
 	http.Redirect(w, r, fmt.Sprintf("/user_timeline/%s", vars["username"]), http.StatusFound)
 
@@ -450,7 +449,7 @@ func UnfollowHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Error marshalling JSON:", err)
 		return
 	}
-	if resp.StatusCode != 204 {
+	if resp.StatusCode != 200 {
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
