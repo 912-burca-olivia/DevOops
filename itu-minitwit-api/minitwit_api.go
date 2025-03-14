@@ -497,7 +497,7 @@ func PostLoginHandler(w http.ResponseWriter, r *http.Request) {
 	var foundUser User
 	result := db.Debug().Where("username = ?", req.Username).First(&foundUser) //db.Where("username = ?", req.Username).First(&foundUser)
 	if result.Error == gorm.ErrRecordNotFound {
-		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		http.Error(w, "Invalid credentials", http.StatusNotFound)
 		return
 	} else if result.Error != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
