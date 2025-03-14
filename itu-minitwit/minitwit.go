@@ -225,14 +225,14 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/", http.StatusFound)
 			return
 		} else {
-			if resp.StatusCode == http.StatusUnauthorized {
-				renderTemplate(w, "login", map[string]interface{}{
-					"Error": "Invalid password",
-				})
-				return
-			} else if resp.StatusCode == http.StatusNotFound {
+			if resp.StatusCode == http.StatusNotFound {
 				renderTemplate(w, "login", map[string]interface{}{
 					"Error": "Invalid username",
+				})
+				return
+			} else if resp.StatusCode == http.StatusUnauthorized {
+				renderTemplate(w, "login", map[string]interface{}{
+					"Error": "Invalid password",
 				})
 				return
 			} else {
