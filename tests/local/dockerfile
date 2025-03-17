@@ -1,0 +1,31 @@
+# Use a lightweight Python image
+FROM python:3.11-slim
+
+# Set the working directory
+WORKDIR /tests
+
+# Install system dependencies for Selenium, SQLite, curl, and wget
+RUN apt-get update && apt-get install -y \
+    firefox-esr \
+    wget \
+    curl \
+    unzip \
+    sqlite3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Download and install the latest Geckodriver
+RUN GECKO_VERSION=$(curl -s https://api.github.com/repos/mozilla/geckodriver/releases/latest | grep '"tag_name":' | cut -d'"' -f4 | sed 's/^v//') && \
+    wget -q "https://github.com/mozilla/geckodriver/releases/download/v${GECKO_VERSION}/geckodriver-v${GECKO_VERSION}-linux64.tar.gz" -O /tmp/geckodriver.tar.gz && \
+    tar -xzf /tmp/geckodriver.tar.gz -C /usr/local/bin && \
+    chmod +x /usr/local/bin/geckodriver && \
+    rm /tmp/geckodriver.tar.gz
+
+# Copy and install test dependencies
+COPY ../requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy test scripts
+COPY ../ .
+
+# Set pytest as the default command
+CMD ["pytest", "--tb=short", "--maxfail=15"]
