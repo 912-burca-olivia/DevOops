@@ -7,7 +7,7 @@ from pathlib import Path
 from contextlib import closing
 
 
-BASE_URL = 'http://localhost:9090'
+BASE_URL = 'http://localhost:7070'
 DATABASE = "minitwit.db"
 USERNAME = 'simulator'
 PWD = 'super_safe!'

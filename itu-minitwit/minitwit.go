@@ -21,7 +21,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-var ENDPOINT = "http://localhost:9090"
+var ENDPOINT = "http://localhost:7070"
 
 var store = sessions.NewCookieStore([]byte("SESSION_KEY"))
 
@@ -561,7 +561,7 @@ func UserTimelineHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func getEndpoint() string {
-	defaultEndpoint := "http://localhost:9090" // Default if ENDPOINT is not set
+	defaultEndpoint := "http://localhost:7070" // Default if ENDPOINT is not set
 	if endpoint, exists := os.LookupEnv("ENDPOINT"); exists {
 		return endpoint
 	}

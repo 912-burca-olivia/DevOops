@@ -13,6 +13,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -21,6 +23,11 @@ const DATABASE = "../minitwit.db"
 const PER_PAGE = 30
 
 var store = sessions.NewCookieStore([]byte("SESSION_KEY"))
+
+
+type API struct {
+	metrics *Metrics
+}
 
 func connectDB() (*gorm.DB, error) {
 	databasePath := os.Getenv("DATABASE")
@@ -58,7 +65,7 @@ func UpdateLatest(r *http.Request) {
 	}
 }
 
-func GETLatestHandler(w http.ResponseWriter, r *http.Request) {
+func (api *API) GETLatestHandler(w http.ResponseWriter, r *http.Request) {
 	// Read the latest processed action ID from a file
 	UpdateLatest(r)
 	content, err := os.ReadFile("latest_processed_sim_action_id.txt")
@@ -74,6 +81,7 @@ func GETLatestHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	latestID_int, _ := strconv.Atoi(latestID)
+	api.metrics.SuccessfulRequests.WithLabelValues(r.URL.Path).Inc()
 	json.NewEncoder(w).Encode(map[string]int{"latest": latestID_int})
 }
 
@@ -87,7 +95,7 @@ func GetNumberHandler(r *http.Request) int {
 	return parsedCommandID
 }
 
-func GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
+func (api *API) GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
 
 	db, err := connectDB()
 	if err != nil {
@@ -131,7 +139,7 @@ func GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
+func (api *API) POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 
 	UpdateLatest(r)
 
@@ -171,8 +179,9 @@ func POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed to follow user", http.StatusBadRequest)
 			return
 		}
-
+		api.metrics.SuccessfulRequests.WithLabelValues(r.URL.Path).Inc()
 		json.NewEncoder(w).Encode(data)
+		w.WriteHeader(http.StatusNoContent)
 		return
 	} else if unfollowsUsername, exists := data["unfollow"]; exists {
 		unfollowsUserID, _ := getUserID(db, unfollowsUsername.(string))
@@ -187,14 +196,15 @@ func POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed to unfollow user", http.StatusBadRequest)
 			return
 		}
-
+		api.metrics.SuccessfulRequests.WithLabelValues(r.URL.Path).Inc()
 		json.NewEncoder(w).Encode(data)
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-
+	w.WriteHeader(http.StatusNoContent)
 }
 
-func RegisterHandler(w http.ResponseWriter, r *http.Request) {
+func (api *API) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	db, err := connectDB()
 	if err != nil {
 		http.Error(w, "Database connection failed", http.StatusInternalServerError)
@@ -240,6 +250,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	var status int
 
 	if error == "" {
+		api.metrics.SuccessfulRequests.WithLabelValues(r.URL.Path).Inc()
 		w.WriteHeader(http.StatusNoContent)
 		status = 200
 	} else {
@@ -253,7 +264,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-func GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
+func (api *API) GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	// Connect to the database
 	db, err := connectDB()
 	if err != nil {
@@ -280,6 +291,7 @@ func GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if len(messages) == 0 {
+		api.metrics.SuccessfulRequests.WithLabelValues(r.URL.Path).Inc()
 		w.Write([]byte("[]"))
 		return
 	}
@@ -294,11 +306,11 @@ func GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		filteredMsgs = append(filteredMsgs, filteredMsg)
 	}
-
+	api.metrics.SuccessfulRequests.WithLabelValues(r.URL.Path).Inc()
 	json.NewEncoder(w).Encode(filteredMsgs)
 }
 
-func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
+func (api *API) GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	// Connect to the database
 	db, err := connectDB()
 	if err != nil {
@@ -349,12 +361,12 @@ func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		filteredMsgs = append(filteredMsgs, filteredMsg)
 	}
-
+	api.metrics.SuccessfulRequests.WithLabelValues(r.URL.Path).Inc()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(filteredMsgs)
 }
 
-func POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
+func (api *API) POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	db, err := connectDB()
 	if err != nil {
 		http.Error(w, "Database connection failed", http.StatusInternalServerError)
@@ -391,6 +403,7 @@ func POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Insert into DB
+
 	if err := db.Create(&message).Error; err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -401,14 +414,16 @@ func POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Successful response
+	
 	w.WriteHeader(http.StatusNoContent)
+	api.metrics.SuccessfulRequests.WithLabelValues(r.URL.Path).Inc()
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"status": http.StatusNoContent,
 		"res":    "",
 	})
 }
 
-func GETUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
+func (api *API) GETUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
 	db, err := connectDB()
 	if err != nil {
 		http.Error(w, "Database connection failed", http.StatusInternalServerError)
@@ -450,11 +465,11 @@ func GETUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
 		Username: user.Username,
 		Email:    user.Email,
 	}
-
+	api.metrics.SuccessfulRequests.WithLabelValues(r.URL.Path).Inc()
 	json.NewEncoder(w).Encode(userDetails)
 }
 
-func GETFollowingHandler(w http.ResponseWriter, r *http.Request) {
+func (api *API) GETFollowingHandler(w http.ResponseWriter, r *http.Request) {
 	db, err := connectDB()
 	if err != nil {
 		http.Error(w, "Database connection failed", http.StatusInternalServerError)
@@ -475,12 +490,12 @@ func GETFollowingHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		isFollowing = false // Default to false if no rows found or any error occurs
 	}
-
+	api.metrics.SuccessfulRequests.WithLabelValues(r.URL.Path).Inc()
 	json.NewEncoder(w).Encode(isFollowing)
 
 }
 
-func PostLoginHandler(w http.ResponseWriter, r *http.Request) {
+func (api *API) PostLoginHandler(w http.ResponseWriter, r *http.Request) {
 	db, err := connectDB()
 	if err != nil {
 		http.Error(w, "Database connection failed", http.StatusInternalServerError)
@@ -507,6 +522,7 @@ func PostLoginHandler(w http.ResponseWriter, r *http.Request) {
 	// At this point we know that a user exists
 	// Check the password hash against the one found in the db
 	if req.Password == foundUser.PWHash {
+		api.metrics.SuccessfulRequests.WithLabelValues(r.URL.Path).Inc()
 		w.WriteHeader(http.StatusOK)
 	} else {
 
@@ -515,7 +531,7 @@ func PostLoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func GetFollowingMessages(w http.ResponseWriter, r *http.Request) {
+func (api *API) GetFollowingMessages(w http.ResponseWriter, r *http.Request) {
 	db, err := connectDB()
 
 	if err != nil {
@@ -553,7 +569,7 @@ func GetFollowingMessages(w http.ResponseWriter, r *http.Request) {
 		}
 		filteredMsgs = append(filteredMsgs, filteredMsg)
 	}
-
+	api.metrics.SuccessfulRequests.WithLabelValues(r.URL.Path).Inc()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(filteredMsgs)
 
@@ -569,21 +585,26 @@ func main() {
 		SameSite: http.SameSiteStrictMode,
 	}
 
+	metrics := InitMetrics() // Initialize metrics
+	api := &API{metrics: metrics} // Initialize API with metrics
+
 	r := mux.NewRouter()
 
+
+	r.Handle("/metrics", promhttp.Handler())
 	// Define the routes and their handlers
-	r.HandleFunc("/latest", GETLatestHandler).Methods("GET")
-	r.HandleFunc("/register", RegisterHandler).Methods("POST")
-	r.HandleFunc("/fllws/{username}", POSTFollowerHandler).Methods("POST")
-	r.HandleFunc("/fllws/{username}", GETFollowerHandler).Methods("GET")
-	r.HandleFunc("/msgs", GETAllMessagesHandler).Methods("GET")
-	r.HandleFunc("/msgs/{username}", GETUserMessagesHandler).Methods("GET")
-	r.HandleFunc("/msgs/{username}", POSTMessagesHandler).Methods("POST")
-	r.HandleFunc("/followingmsgs", GetFollowingMessages).Methods("GET")
-	r.HandleFunc("/getUserDetails", GETUserDetailsHandler).Methods("GET")
-	r.HandleFunc("/isfollowing", GETFollowingHandler).Methods("GET")
-	r.HandleFunc("/login", PostLoginHandler).Methods("POST")
-	// Start the server on port 9090
-	fmt.Println("Server starting on http://localhost:9090")
-	log.Fatal(http.ListenAndServe(":9090", r))
+	r.HandleFunc("/latest", api.GETLatestHandler).Methods("GET")
+	r.HandleFunc("/register", api.RegisterHandler).Methods("POST")
+	r.HandleFunc("/fllws/{username}", api.POSTFollowerHandler).Methods("POST")
+	r.HandleFunc("/fllws/{username}", api.GETFollowerHandler).Methods("GET")
+	r.HandleFunc("/msgs", api.GETAllMessagesHandler).Methods("GET")
+	r.HandleFunc("/msgs/{username}", api.GETUserMessagesHandler).Methods("GET")
+	r.HandleFunc("/msgs/{username}", api.POSTMessagesHandler).Methods("POST")
+	r.HandleFunc("/followingmsgs", api.GetFollowingMessages).Methods("GET")
+	r.HandleFunc("/getUserDetails", api.GETUserDetailsHandler).Methods("GET")
+	r.HandleFunc("/isfollowing", api.GETFollowingHandler).Methods("GET")
+	r.HandleFunc("/login", api.PostLoginHandler).Methods("POST")
+	// Start the server on port 7070
+	fmt.Println("Server starting on http://localhost:7070")
+	log.Fatal(http.ListenAndServe(":7070", r))
 }
