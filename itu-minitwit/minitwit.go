@@ -21,7 +21,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-var ENDPOINT = "http://localhost:7070"
+var ENDPOINT = "http://localhost:9090"
 
 var store = sessions.NewCookieStore([]byte("SESSION_KEY"))
 
