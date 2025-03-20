@@ -21,11 +21,12 @@ import (
 const DATABASE = "../minitwit.db"
 const PER_PAGE = 30
 
+var db *gorm.DB
+var err error
+
 var store = sessions.NewCookieStore([]byte("SESSION_KEY"))
 
 func connectDB() (*gorm.DB, error) {
-	var db *gorm.DB
-	var err error
 
 	host := os.Getenv("DB_HOST")
 	if host == "" { // sqlite locally - for now
@@ -101,12 +102,6 @@ func GetNumberHandler(r *http.Request) int {
 
 func GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
 
-	db, err := connectDB()
-	if err != nil {
-		http.Error(w, "Database connection failed", http.StatusInternalServerError)
-		return
-	}
-
 	//number of requested followers
 	rowNums := GetNumberHandler(r)
 
@@ -146,13 +141,6 @@ func GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
 func POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 
 	UpdateLatest(r)
-
-	db, err := connectDB()
-
-	if err != nil {
-		http.Error(w, "Database connection failed", http.StatusInternalServerError)
-		return
-	}
 
 	vars := mux.Vars(r)
 
@@ -207,11 +195,6 @@ func POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func RegisterHandler(w http.ResponseWriter, r *http.Request) {
-	db, err := connectDB()
-	if err != nil {
-		http.Error(w, "Database connection failed", http.StatusInternalServerError)
-		return
-	}
 
 	UpdateLatest(r) // Updater the latest parameter
 
@@ -266,12 +249,6 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
-	// Connect to the database
-	db, err := connectDB()
-	if err != nil {
-		http.Error(w, "Database connection failed", http.StatusInternalServerError)
-		return
-	}
 
 	UpdateLatest(r)
 
@@ -311,12 +288,7 @@ func GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
-	// Connect to the database
-	db, err := connectDB()
-	if err != nil {
-		http.Error(w, "Database connection failed", http.StatusInternalServerError)
-		return
-	}
+
 	UpdateLatest(r)
 
 	username := mux.Vars(r)["username"]
@@ -367,11 +339,7 @@ func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
-	db, err := connectDB()
-	if err != nil {
-		http.Error(w, "Database connection failed", http.StatusInternalServerError)
-		return
-	}
+
 	UpdateLatest(r)
 
 	username := mux.Vars(r)["username"]
@@ -421,11 +389,6 @@ func POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func GETUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
-	db, err := connectDB()
-	if err != nil {
-		http.Error(w, "Database connection failed", http.StatusInternalServerError)
-		return
-	}
 
 	userID := r.URL.Query().Get("user_id")
 	username := r.URL.Query().Get("username")
@@ -467,11 +430,6 @@ func GETUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func GETFollowingHandler(w http.ResponseWriter, r *http.Request) {
-	db, err := connectDB()
-	if err != nil {
-		http.Error(w, "Database connection failed", http.StatusInternalServerError)
-		return
-	}
 
 	whoUsername := r.URL.Query().Get("whoUsername")
 	whomUsername := r.URL.Query().Get("whomUsername")
@@ -493,11 +451,6 @@ func GETFollowingHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func PostLoginHandler(w http.ResponseWriter, r *http.Request) {
-	db, err := connectDB()
-	if err != nil {
-		http.Error(w, "Database connection failed", http.StatusInternalServerError)
-		return
-	}
 
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -528,12 +481,6 @@ func PostLoginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetFollowingMessages(w http.ResponseWriter, r *http.Request) {
-	db, err := connectDB()
-
-	if err != nil {
-		http.Error(w, "Database connection failed", http.StatusInternalServerError)
-		return
-	}
 
 	var userID = r.URL.Query().Get("userid")
 
