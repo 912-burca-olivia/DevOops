@@ -36,11 +36,11 @@ func initDB() {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 	// Get the underlying SQL database object to close the db
-	sqlDB, err := db.DB()
-	if err != nil {
-		log.Fatalf("Failed to get DB: %v", err)
-	}
-	defer sqlDB.Close()
+	// sqlDB, err := db.DB()
+	// if err != nil {
+	// 	log.Fatalf("Failed to get DB: %v", err)
+	// }
+	// defer sqlDB.Close()
 
 	// Auto-migrate the schema
 	err = db.AutoMigrate(&User{}, &Follower{}, &Message{})
