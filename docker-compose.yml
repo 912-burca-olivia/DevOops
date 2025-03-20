@@ -19,7 +19,7 @@ services:
     image: ${DOCKER_USERNAME}/devoops-api:latest
     container_name: minitwit_api
     ports:
-      - "7070:7070"
+      - "9090:9090"
     volumes:
       - ./minitwit.db:/app/minitwit.db
     environment:
@@ -38,7 +38,7 @@ services:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
     command: --config.file=/etc/prometheus/prometheus.yml
     ports:
-      - "9090:9090"  # Change Prometheus port to 7070
+      - "9091:9090"  # Host port 9191, container port 9090
 
   grafana:
     image: grafana/grafana

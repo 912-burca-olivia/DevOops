@@ -24,7 +24,6 @@ const PER_PAGE = 30
 
 var store = sessions.NewCookieStore([]byte("SESSION_KEY"))
 
-
 type API struct {
 	metrics *Metrics
 }
@@ -414,7 +413,7 @@ func (api *API) POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Successful response
-	
+
 	w.WriteHeader(http.StatusNoContent)
 	api.metrics.SuccessfulRequests.WithLabelValues(r.URL.Path).Inc()
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -585,11 +584,10 @@ func main() {
 		SameSite: http.SameSiteStrictMode,
 	}
 
-	metrics := InitMetrics() // Initialize metrics
+	metrics := InitMetrics()      // Initialize metrics
 	api := &API{metrics: metrics} // Initialize API with metrics
 
 	r := mux.NewRouter()
-
 
 	r.Handle("/metrics", promhttp.Handler())
 	// Define the routes and their handlers
@@ -604,7 +602,7 @@ func main() {
 	r.HandleFunc("/getUserDetails", api.GETUserDetailsHandler).Methods("GET")
 	r.HandleFunc("/isfollowing", api.GETFollowingHandler).Methods("GET")
 	r.HandleFunc("/login", api.PostLoginHandler).Methods("POST")
-	// Start the server on port 7070
-	fmt.Println("Server starting on http://localhost:7070")
-	log.Fatal(http.ListenAndServe(":7070", r))
+	// Start the server on port 9090
+	fmt.Println("Server starting on http://localhost:9090")
+	log.Fatal(http.ListenAndServe(":9090", r))
 }
