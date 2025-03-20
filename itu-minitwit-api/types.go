@@ -33,7 +33,7 @@ type Message struct {
 	Author    User   `gorm:"foreignKey:AuthorID;references:UserID"`
 	Text      string `gorm:"not null"`
 	PubDate   string `gorm:"not null"`
-	Flagged   bool   `gorm:"default:false"`
+	Flagged   uint   `gorm:"default:0"`
 }
 
 type Follower struct {

@@ -13,6 +13,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
 	_ "github.com/mattn/go-sqlite3"
+	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -23,12 +24,23 @@ const PER_PAGE = 30
 var store = sessions.NewCookieStore([]byte("SESSION_KEY"))
 
 func connectDB() (*gorm.DB, error) {
-	databasePath := os.Getenv("DATABASE")
-	if databasePath == "" {
-		databasePath = DATABASE // Fallback in case the env variable is missing
+	var db *gorm.DB
+	var err error
+
+	host := os.Getenv("DB_HOST")
+	if host == "" { // sqlite locally - for now
+		db, err = gorm.Open(sqlite.Open(DATABASE), &gorm.Config{})
+	} else { // postgresql remote
+		dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=require",
+			os.Getenv("DB_HOST"),
+			os.Getenv("DB_PORT"),
+			os.Getenv("DB_USER"),
+			os.Getenv("DB_PASSWORD"),
+			os.Getenv("DB_NAME"),
+		)
+		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	}
 
-	db, err := gorm.Open(sqlite.Open(databasePath), &gorm.Config{})
 	if err != nil {
 		return nil, err
 	}
@@ -268,7 +280,7 @@ func GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	err = db.Table("messages").
 		Select("messages.text AS content, messages.pub_date AS pub_date, users.username AS user").
 		Joins("JOIN users ON messages.author_id = users.user_id").
-		Where("messages.flagged = false").
+		Where("messages.flagged = 0").
 		Order("messages.pub_date DESC").
 		Limit(GetNumberHandler(r)).
 		Find(&messages).Error
@@ -322,7 +334,7 @@ func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	err = db.Table("messages").
 		Select("messages.text AS content, messages.pub_date AS pub_date, users.username AS user").
 		Joins("JOIN users ON messages.author_id = users.user_id").
-		Where("messages.flagged = false AND users.user_id = ?", userID).
+		Where("messages.flagged = 0 AND users.user_id = ?", userID).
 		Order("messages.pub_date DESC").
 		Limit(GetNumberHandler(r)).
 		Find(&messages).Error
@@ -387,7 +399,7 @@ func POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 		AuthorID: userID,
 		Text:     data.Content,
 		PubDate:  FormatDateTime(time.Now().Unix()),
-		Flagged:  false,
+		Flagged:  0,
 	}
 
 	// Insert into DB
@@ -530,7 +542,7 @@ func GetFollowingMessages(w http.ResponseWriter, r *http.Request) {
 	err = db.Table("messages").
 		Select("messages.text AS content, messages.pub_date AS pub_date, users.username AS user").
 		Joins("JOIN users ON users.user_id = messages.author_id").
-		Where("flagged = ? AND (author_id = ? OR author_id IN (SELECT who_id FROM followers WHERE whom_id = ?))", false, userID, userID).
+		Where("flagged = ? AND (author_id = ? OR author_id IN (SELECT who_id FROM followers WHERE whom_id = ?))", 0, userID, userID).
 		Order("messages.pub_date DESC").
 		Limit(PER_PAGE).
 		Find(&messages).Error
