@@ -13,6 +13,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -25,6 +26,10 @@ var db *gorm.DB
 var err error
 
 var store = sessions.NewCookieStore([]byte("SESSION_KEY"))
+
+type API struct {
+	metrics *Metrics
+}
 
 func connectDB() (*gorm.DB, error) {
 
@@ -71,7 +76,7 @@ func UpdateLatest(r *http.Request) {
 	}
 }
 
-func GETLatestHandler(w http.ResponseWriter, r *http.Request) {
+func (api *API) GETLatestHandler(w http.ResponseWriter, r *http.Request) {
 	// Read the latest processed action ID from a file
 	UpdateLatest(r)
 	content, err := os.ReadFile("latest_processed_sim_action_id.txt")
@@ -100,7 +105,7 @@ func GetNumberHandler(r *http.Request) int {
 	return parsedCommandID
 }
 
-func GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
+func (api *API) GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
 
 	//number of requested followers
 	rowNums := GetNumberHandler(r)
@@ -138,7 +143,7 @@ func GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
+func (api *API) POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 
 	UpdateLatest(r)
 
@@ -194,7 +199,7 @@ func POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func RegisterHandler(w http.ResponseWriter, r *http.Request) {
+func (api *API) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 
 	UpdateLatest(r) // Updater the latest parameter
 
@@ -248,7 +253,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-func GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
+func (api *API) GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 
 	UpdateLatest(r)
 
@@ -266,7 +271,7 @@ func GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Query execution failed", http.StatusInternalServerError)
 		return
 	}
-
+	api.metrics.SuccessfulRequests.WithLabelValues("msgs").Inc()
 	w.Header().Set("Content-Type", "application/json")
 	if len(messages) == 0 {
 		w.Write([]byte("[]"))
@@ -287,7 +292,7 @@ func GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(filteredMsgs)
 }
 
-func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
+func (api *API) GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 
 	UpdateLatest(r)
 
@@ -338,7 +343,7 @@ func GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(filteredMsgs)
 }
 
-func POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
+func (api *API) POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 
 	UpdateLatest(r)
 
@@ -388,7 +393,7 @@ func POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func GETUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
+func (api *API) GETUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
 
 	userID := r.URL.Query().Get("user_id")
 	username := r.URL.Query().Get("username")
@@ -429,7 +434,7 @@ func GETUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(userDetails)
 }
 
-func GETFollowingHandler(w http.ResponseWriter, r *http.Request) {
+func (api *API) GETFollowingHandler(w http.ResponseWriter, r *http.Request) {
 
 	whoUsername := r.URL.Query().Get("whoUsername")
 	whomUsername := r.URL.Query().Get("whomUsername")
@@ -450,7 +455,7 @@ func GETFollowingHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func PostLoginHandler(w http.ResponseWriter, r *http.Request) {
+func (api *API) PostLoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -480,7 +485,7 @@ func PostLoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func GetFollowingMessages(w http.ResponseWriter, r *http.Request) {
+func (api *API) GetFollowingMessages(w http.ResponseWriter, r *http.Request) {
 
 	var userID = r.URL.Query().Get("userid")
 
@@ -528,20 +533,23 @@ func main() {
 		SameSite: http.SameSiteStrictMode,
 	}
 
+	metrics := InitMetrics()      // Initialize metrics
+	api := &API{metrics: metrics} // Initialize API with metrics
 	r := mux.NewRouter()
 
+	r.Handle("/metrics", promhttp.Handler())
 	// Define the routes and their handlers
-	r.HandleFunc("/latest", GETLatestHandler).Methods("GET")
-	r.HandleFunc("/register", RegisterHandler).Methods("POST")
-	r.HandleFunc("/fllws/{username}", POSTFollowerHandler).Methods("POST")
-	r.HandleFunc("/fllws/{username}", GETFollowerHandler).Methods("GET")
-	r.HandleFunc("/msgs", GETAllMessagesHandler).Methods("GET")
-	r.HandleFunc("/msgs/{username}", GETUserMessagesHandler).Methods("GET")
-	r.HandleFunc("/msgs/{username}", POSTMessagesHandler).Methods("POST")
-	r.HandleFunc("/followingmsgs", GetFollowingMessages).Methods("GET")
-	r.HandleFunc("/getUserDetails", GETUserDetailsHandler).Methods("GET")
-	r.HandleFunc("/isfollowing", GETFollowingHandler).Methods("GET")
-	r.HandleFunc("/login", PostLoginHandler).Methods("POST")
+	r.HandleFunc("/latest", api.GETLatestHandler).Methods("GET")
+	r.HandleFunc("/register", api.RegisterHandler).Methods("POST")
+	r.HandleFunc("/fllws/{username}", api.POSTFollowerHandler).Methods("POST")
+	r.HandleFunc("/fllws/{username}", api.GETFollowerHandler).Methods("GET")
+	r.HandleFunc("/msgs", api.GETAllMessagesHandler).Methods("GET")
+	r.HandleFunc("/msgs/{username}", api.GETUserMessagesHandler).Methods("GET")
+	r.HandleFunc("/msgs/{username}", api.POSTMessagesHandler).Methods("POST")
+	r.HandleFunc("/followingmsgs", api.GetFollowingMessages).Methods("GET")
+	r.HandleFunc("/getUserDetails", api.GETUserDetailsHandler).Methods("GET")
+	r.HandleFunc("/isfollowing", api.GETFollowingHandler).Methods("GET")
+	r.HandleFunc("/login", api.PostLoginHandler).Methods("POST")
 	// Start the server on port 9090
 	fmt.Println("Server starting on http://localhost:9090")
 	log.Fatal(http.ListenAndServe(":9090", r))
