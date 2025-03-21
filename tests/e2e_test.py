@@ -5,6 +5,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.firefox.options import Options
+import sqlite3
 
 GUI_URL = "http://app_test:8080/register"
 
@@ -24,7 +25,7 @@ def _register_user_via_gui(driver, data):
 
     return flashes
 
-def test_register_user_via_gui_and_check_db_entry(test_db):
+def test_register_user_via_gui_and_check_db_entry():
     """E2E test: Register user via UI and verify database entry."""
     firefox_options = Options()
     firefox_options.add_argument("--headless")
@@ -32,6 +33,8 @@ def test_register_user_via_gui_and_check_db_entry(test_db):
     # STILL HAS TO BE CHANGED TO HANDLE GORM ACCESS
 
     with webdriver.Firefox(service=Service("/usr/local/bin/geckodriver"), options=firefox_options) as driver:
+
+        test_db = sqlite3.connect("/app/test_minitwit.db")
         cursor = test_db.cursor()  # Now test_db is a valid connection
 
         cursor.execute("SELECT username FROM users WHERE username = ?", ("Me",))

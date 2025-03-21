@@ -11,7 +11,7 @@ services:
     environment:
       DATABASE: "/app/test_minitwit.db"
     volumes:
-      - ./tests/schema.sql:/app/schema.sql # ensuring idempotency by only mounting schema
+      - test_minitwit.db:/app
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9090/msgs"]
       interval: 10s
@@ -48,14 +48,9 @@ services:
         condition: service_healthy
       app_test:
         condition: service_healthy
-    environment:
-      DATABASE: ":memory:"
-      SCHEMA_PATH: "/tests/schema.sql"
     volumes:
-      - ./tests/schema.sql:/app/schema.sql # ensuring idempotency by only mounting schema
-    command:
-      [
-        "/bin/sh",
-        "-c",
-        "python /tests/init_test_db.py && pytest --tb=short --maxfail=15",
-      ]
+      - test_minitwit.db:/app
+    command: ["/bin/sh", "-c", "pytest --tb=short --maxfail=15"]
+
+volumes:
+  test_minitwit.db:
