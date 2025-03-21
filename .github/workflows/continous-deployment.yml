@@ -48,36 +48,6 @@ jobs:
           cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/devoops-api:mysqlbuildcache
           cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/devoops-api:mysqlbuildcache,mode=max
 
-      - name: Build and push devoops-api-test image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./itu-minitwit-api/dockerfile
-          push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/devoops-api-test:latest
-          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/devoops-api-test:mysqlbuildcache
-          cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/devoops-api-test:mysqlbuildcache,mode=max
-
-      - name: Build and push devoops-app-test image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./itu-minitwit/dockerfile
-          push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/devoops-app-test:latest
-          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/devoops-app-test:mysqlbuildcache
-          cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/devoops-app-test:mysqlbuildcache,mode=max
-
-      - name: Build and push devoops-test image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./tests/dockerfile
-          push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/devoops-test:latest
-          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/devoops-test:mysqlbuildcache
-          cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/devoops-test:mysqlbuildcache,mode=max
-
   test:
     runs-on: ubuntu-latest
     needs: build
@@ -90,11 +60,11 @@ jobs:
 
       - name: Run test stack via Docker Compose
         run: |
-          docker compose -f docker-compose_test.yml up --abort-on-container-exit --exit-code-from test_runner
+          docker compose -f docker-compose_test_local.yml up --abort-on-container-exit --exit-code-from test_runner
 
       - name: Tear down test stack
         if: always()
-        run: docker compose -f docker-compose_test.yml down -v
+        run: docker compose -f docker-compose_test_local.yml down -v
 
   deploy:
     runs-on: ubuntu-latest
