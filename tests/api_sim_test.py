@@ -1,35 +1,24 @@
 import os
 import json
 import base64
-import sqlite3
 import requests
 from pathlib import Path
 from contextlib import closing
+import pytest
 
+# API and Database Configuration
+BASE_URL = 'http://api_test:9090'
+# DATABASE = os.getenv("DATABASE", "/test/test_minitwit.db")
 
-BASE_URL = 'http://localhost:9090'
-DATABASE = "minitwit.db"
 USERNAME = 'simulator'
 PWD = 'super_safe!'
 CREDENTIALS = ':'.join([USERNAME, PWD]).encode('ascii')
 ENCODED_CREDENTIALS = base64.b64encode(CREDENTIALS).decode()
-HEADERS = {'Connection': 'close',
-           'Content-Type': 'application/json',
-           f'Authorization': f'Basic {ENCODED_CREDENTIALS}'}
-
-
-def init_db():
-    """Creates the database tables."""
-    with closing(sqlite3.connect(DATABASE)) as db:
-        with open("schema.sql") as fp:
-            db.cursor().executescript(fp.read())
-        db.commit()
-
-
-# Empty the database and initialize the schema again
-Path(DATABASE).unlink()
-init_db()
-
+HEADERS = {
+    'Connection': 'close',
+    'Content-Type': 'application/json',
+    f'Authorization': f'Basic {ENCODED_CREDENTIALS}'
+}
 
 def test_latest():
     # post something to update LATEST
@@ -215,4 +204,3 @@ def asdtest_a_unfollows_b():
     # verify that latest was updated
     response = requests.get(f'{BASE_URL}/latest', headers=HEADERS)
     assert response.json()['latest'] == 11
-

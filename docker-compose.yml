@@ -23,7 +23,7 @@ services:
     env_file:
       - .env
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9090"]
+      test: ["CMD", "curl", "-f", "http://localhost:9090/msgs"]
       interval: 10s
       retries: 5
       start_period: 10s
