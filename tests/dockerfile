@@ -21,11 +21,11 @@ RUN GECKO_VERSION=$(curl -s https://api.github.com/repos/mozilla/geckodriver/rel
     rm /tmp/geckodriver.tar.gz
 
 # Copy and install test dependencies
-COPY ../requirements.txt .
+COPY ./tests/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy test scripts
-COPY ../ .
+COPY ./tests/ .
 
 # Set pytest as the default command
 CMD ["pytest", "--tb=short", "--maxfail=15"]
