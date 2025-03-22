@@ -33,7 +33,7 @@ def test_latest():
     url = f'{BASE_URL}/latest'
     response = requests.get(url, headers=HEADERS)
     assert response.ok
-    assert response.json()['latest'] == 1335
+    assert response.json()['latest'] == 1337
 
 
 
