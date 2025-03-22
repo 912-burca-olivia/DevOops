@@ -19,7 +19,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const DATABASE = "../minitwit.db"
+// const DATABASE = "../minitwit.db"
 const PER_PAGE = 30
 
 var db *gorm.DB
@@ -34,8 +34,13 @@ type API struct {
 func connectDB() (*gorm.DB, error) {
 
 	host := os.Getenv("DB_HOST")
-	if host == "" { // sqlite locally - for now
-		db, err = gorm.Open(sqlite.Open(DATABASE), &gorm.Config{})
+
+	if host == "" {
+		dbPath := os.Getenv("DATABASE")
+		if dbPath == "" {
+			dbPath = "../minitwit.db"
+		}
+		db, err = gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	} else { // postgresql remote
 		dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=require",
 			os.Getenv("DB_HOST"),
