@@ -277,7 +277,7 @@ func (api *API) GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 		Select("messages.text AS content, messages.pub_date AS pub_date, users.username AS user").
 		Joins("JOIN users ON messages.author_id = users.user_id").
 		Where("messages.flagged = 0").
-		Order("messages.pub_date DESC").
+		Order("messages.message_id DESC").
 		Limit(GetNumberHandler(r)).
 		Find(&messages).Error
 
@@ -328,7 +328,7 @@ func (api *API) GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 		Select("messages.text AS content, messages.pub_date AS pub_date, users.username AS user").
 		Joins("JOIN users ON messages.author_id = users.user_id").
 		Where("messages.flagged = 0 AND users.user_id = ?", userID).
-		Order("messages.pub_date DESC").
+		Order("messages.message_id DESC").
 		Limit(GetNumberHandler(r)).
 		Find(&messages).Error
 
@@ -518,7 +518,7 @@ func (api *API) GetFollowingMessages(w http.ResponseWriter, r *http.Request) {
 		Select("messages.text AS content, messages.pub_date AS pub_date, users.username AS user").
 		Joins("JOIN users ON users.user_id = messages.author_id").
 		Where("flagged = ? AND (author_id = ? OR author_id IN (SELECT who_id FROM followers WHERE whom_id = ?))", 0, userID, userID).
-		Order("messages.pub_date DESC").
+		Order("messages.message_id DESC").
 		Limit(PER_PAGE).
 		Find(&messages).Error
 
