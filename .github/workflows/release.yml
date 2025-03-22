@@ -1,8 +1,11 @@
 name: Create release
 
-on:
-  schedule:
-    - cron: "0 19 * * 4" # Runs every Thursday at 19:00 UTC
+on: # tag push, every thursday or manually
+  push:
+    tags:
+      - "v*"
+  # schedule:
+  #   - cron: "0 19 * * 4"
   workflow_dispatch:
 
 permissions:
@@ -13,12 +16,16 @@ jobs:
     name: Release pushed tag
     runs-on: ubuntu-latest
     steps:
-      - name: Create release
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create GitHub release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ github.ref_name }}
         run: |
+          echo "Creating release for tag: $tag"
           gh release create "$tag" \
-              --repo="$GITHUB_REPOSITORY" \
-              --title="${tag#v}" \
-              --generate-notes
+            --repo="$GITHUB_REPOSITORY" \
+            --title="${tag#v}" \
+            --generate-notes
