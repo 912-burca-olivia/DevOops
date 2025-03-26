@@ -10,10 +10,14 @@ import (
 	"strings"
 	"time"
 
+	"crypto/tls"
+
+	logrustash "github.com/bshuster-repo/logrus-logstash-hook"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/sirupsen/logrus"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -27,8 +31,53 @@ var err error
 
 var store = sessions.NewCookieStore([]byte("SESSION_KEY"))
 
+var logger = logrus.New()
+
+func initLogger() {
+	// logger.AddHook(&LogrusTCPHook{
+	// 	Address: "logstash:5044", // Logstash container address
+	// })
+	conn, err := tls.Dial("tcp", "logstash:5044", &tls.Config{RootCAs: nil})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	hook := logrustash.New(conn, logrustash.DefaultFormatter(logrus.Fields{"type": "minitwit"}))
+
+	// Add the hook to the logger
+	logger.Hooks.Add(hook)
+
+	logger.SetFormatter(&logrus.JSONFormatter{})
+
+	logger.SetOutput(os.Stdout)
+
+	logger.SetLevel(logrus.DebugLevel)
+}
+
 type API struct {
 	metrics *Metrics
+}
+
+func afterRequestLogging(start time.Time, r *http.Request) {
+	// Check if a request takes longer than 2 seconds
+
+	duration := time.Since(start)
+
+	if duration > 2*time.Second {
+		logger.WithFields(logrus.Fields{
+			"method":    r.Method,
+			"path":      r.URL.Path,
+			"duration":  duration,
+			"remote_ip": r.RemoteAddr,
+		}).Warn("Slow request detected")
+	} else {
+		logger.WithFields(logrus.Fields{
+			"method":    r.Method,
+			"path":      r.URL.Path,
+			"duration":  duration,
+			"remote_ip": r.RemoteAddr,
+		}).Info("Request completed quickly")
+	}
 }
 
 func connectDB() (*gorm.DB, error) {
@@ -40,6 +89,7 @@ func connectDB() (*gorm.DB, error) {
 		if dbPath == "" {
 			dbPath = "../minitwit.db"
 		}
+		logger.Info("Connecting to SQLite database", logrus.Fields{"path": dbPath})
 		db, err = gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	} else { // postgresql remote
 		dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=require",
@@ -49,13 +99,16 @@ func connectDB() (*gorm.DB, error) {
 			os.Getenv("DB_PASSWORD"),
 			os.Getenv("DB_NAME"),
 		)
+		logger.Info("Connecting to PostgreSQL database", logrus.Fields{"host": os.Getenv("DB_HOST")})
 		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	}
 
 	if err != nil {
+		logger.WithError(err).Error("Failed to connect to the database")
 		return nil, err
 	}
 
+	logger.Info("Database connection successful")
 	return db, nil
 }
 
@@ -82,10 +135,18 @@ func UpdateLatest(r *http.Request) {
 }
 
 func (api *API) GETLatestHandler(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+
+	logger.WithFields(logrus.Fields{
+		"method": r.Method,
+		"path":   r.URL.Path,
+		"ip":     r.RemoteAddr,
+	}).Info("Get latest request")
 	// Read the latest processed action ID from a file
 	UpdateLatest(r)
 	content, err := os.ReadFile("latest_processed_sim_action_id.txt")
 	if err != nil {
+		logger.WithError(err).Error("Failed to read latest action ID")
 		api.metrics.BadRequests.WithLabelValues("latest").Inc()
 		http.Error(w, "Failed to read latest action ID", http.StatusInternalServerError)
 		return
@@ -98,7 +159,13 @@ func (api *API) GETLatestHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	latestID_int, _ := strconv.Atoi(latestID)
+	logger.WithFields(logrus.Fields{
+		"latest_id": latestID_int,
+	}).Info("Successfully retrieved latest action ID")
+
 	json.NewEncoder(w).Encode(map[string]int{"latest": latestID_int})
+
+	defer afterRequestLogging(start, r)
 }
 
 func GetNumberHandler(r *http.Request) int {
@@ -116,12 +183,22 @@ func (api *API) GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
 	//number of requested followers
 	rowNums := GetNumberHandler(r)
 
+	start := time.Now()
+
+	logger.WithFields(logrus.Fields{
+		"method":    r.Method,
+		"path":      r.URL.Path,
+		"query":     r.URL.RawQuery,
+		"remote_ip": r.RemoteAddr,
+	}).Info("GETFollowerHandler called")
+
 	UpdateLatest(r)
 	vars := mux.Vars(r)
 
 	userID, _ := getUserID(db, vars["username"])
 
 	if userID == 0 {
+		logger.WithField("username", vars["username"]).Warn("User not found")
 		api.metrics.BadRequests.WithLabelValues("get_follower").Inc()
 		http.Error(w, "Cannot find user", http.StatusNotFound)
 		return
@@ -141,24 +218,35 @@ func (api *API) GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
 		Error
 
 	if err != nil {
+		logger.WithFields(logrus.Fields{"error": err.Error(), "userID": userID}).Error("Failed to fetch followers")
 		http.Error(w, "Query execution failed", http.StatusInternalServerError)
 		return
 	}
 
+	logger.WithField("follower_count", len(followers)).Info("Followers retrieved successfully")
 	response := map[string][]string{"follows": followers}
 	json.NewEncoder(w).Encode(response)
+
+	defer afterRequestLogging(start, r)
 
 }
 
 func (api *API) POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 
 	UpdateLatest(r)
 
 	vars := mux.Vars(r)
 
+	logger.WithFields(logrus.Fields{
+		"action":   "follow",
+		"username": vars["username"],
+	}).Info("Handling follow request")
+
 	userID, _ := getUserID(db, vars["username"])
 
 	if userID == 0 {
+		logger.Warn("User not found", logrus.Fields{"username": vars["username"]})
 		api.metrics.BadRequests.WithLabelValues("post_follower").Inc()
 		http.Error(w, "Cannot find user", http.StatusNotFound)
 		return
@@ -171,6 +259,7 @@ func (api *API) POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 	if followsUsername, exists := data["follow"]; exists {
 		followsUserID, _ := getUserID(db, followsUsername.(string))
 		if followsUserID == 0 {
+			logger.Warn("Follow target user not found", logrus.Fields{"target_user": followsUsername})
 			api.metrics.BadRequests.WithLabelValues("post_follower").Inc()
 			http.Error(w, "The user you are trying to follow cannot be found", http.StatusNotFound)
 			return
@@ -182,6 +271,7 @@ func (api *API) POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 		err := db.Create(&follower).Error
 
 		if err != nil {
+			logger.WithError(err).Error("Failed to insert follow relationship")
 			api.metrics.BadRequests.WithLabelValues("post_follower").Inc()
 			http.Error(w, "Failed to follow user", http.StatusBadRequest)
 			return
@@ -204,25 +294,40 @@ func (api *API) POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed to unfollow user", http.StatusBadRequest)
 			return
 		}
+
+		logger.WithFields(logrus.Fields{
+			"user":   vars["username"],
+			"target": followsUsername,
+		}).Info("User followed successfully")
+
 		api.metrics.UnfollowRequests.WithLabelValues("unfollow").Inc()
 		json.NewEncoder(w).Encode(data)
 		return
 	}
+	defer afterRequestLogging(start, r)
 
 }
 
 func (api *API) RegisterHandler(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 
 	UpdateLatest(r) // Updater the latest parameter
+
+	logger.WithFields(logrus.Fields{
+		"method":    r.Method,
+		"path":      r.URL.Path,
+		"remote_ip": r.RemoteAddr,
+	}).Info("RegisterHandler called")
 
 	var error = ""
 
 	var data map[string]interface{}
 	json.NewDecoder(r.Body).Decode(&data)
 
-	username := data["username"].(string)
-	email := data["email"].(string)
-	password := data["pwd"].(string)
+	username, email, password := data["username"].(string), data["email"].(string), data["pwd"].(string)
+
+	logger.WithFields(logrus.Fields{"username": username, "email": email}).Debug("Validating registration input")
+
 	// Validate input fields
 	if username == "" {
 		error = "You have to enter a username"
@@ -243,6 +348,7 @@ func (api *API) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 			newUser := User{Username: username, Email: email, PWHash: password}
 			err := db.Create(&newUser).Error
 			if err != nil {
+				logger.WithError(err).Error("Error inserting user")
 				log.Println("Error inserting user:", err)
 				http.Error(w, "Failed to register user", http.StatusInternalServerError)
 				return
@@ -252,10 +358,12 @@ func (api *API) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	var status int
 
 	if error == "" {
+		logger.WithField("username", username).Info("User registered successfully")
 		api.metrics.SuccessfulRequests.WithLabelValues("register").Inc()
 		w.WriteHeader(http.StatusNoContent)
 		status = 200
 	} else {
+		logger.Warn(error)
 		api.metrics.BadRequests.WithLabelValues("register").Inc()
 		w.WriteHeader(http.StatusBadRequest)
 		status = 400
@@ -265,11 +373,21 @@ func (api *API) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		"error_msg": error,
 	}
 	json.NewEncoder(w).Encode(response)
+
+	defer afterRequestLogging(start, r)
 }
 
 func (api *API) GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 
 	UpdateLatest(r)
+
+	logger.WithFields(logrus.Fields{
+		"method":    r.Method,
+		"path":      r.URL.Path,
+		"query":     r.URL.RawQuery,
+		"remote_ip": r.RemoteAddr,
+	}).Info("GETAllMessagesHandler called")
 
 	// Retrieve all non-flagged messages
 	var messages []APIMessage
@@ -282,11 +400,15 @@ func (api *API) GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 		Find(&messages).Error
 
 	if err != nil {
+		logger.WithError(err).Error("Failed to fetch messages")
 		api.metrics.BadRequests.WithLabelValues("get_messages").Inc()
 		http.Error(w, "Query execution failed", http.StatusInternalServerError)
 		return
 	}
+
+	logger.WithField("message_count", len(messages)).Info("Messages retrieved successfully")
 	api.metrics.SuccessfulRequests.WithLabelValues("msgs").Inc()
+
 	w.Header().Set("Content-Type", "application/json")
 	if len(messages) == 0 {
 		w.Write([]byte("[]"))
@@ -305,17 +427,28 @@ func (api *API) GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(filteredMsgs)
+
+	defer afterRequestLogging(start, r)
 }
 
 func (api *API) GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 
 	UpdateLatest(r)
 
 	username := mux.Vars(r)["username"]
 
+	logger.WithFields(logrus.Fields{
+		"method":    r.Method,
+		"path":      r.URL.Path,
+		"username":  username,
+		"remote_ip": r.RemoteAddr,
+	}).Info("GETUserMessagesHandler called")
+
 	// Get user ID
 	userID, err := getUserID(db, username)
 	if err != nil || userID == 0 {
+		logger.WithField("username", username).Warn("User not found")
 		fmt.Printf("Cannot find user: %s", username)
 		http.Error(w, "Cannot find user", http.StatusNotFound)
 		api.metrics.BadRequests.WithLabelValues("get_user_messages").Inc()
@@ -333,12 +466,15 @@ func (api *API) GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 		Find(&messages).Error
 
 	if err != nil {
+		logger.WithError(err).Error("Failed to fetch user messages")
 		http.Error(w, "Query execution failed", http.StatusInternalServerError)
 		return
 	}
 
-	// Ensure empty response is always a valid JSON array
 	api.metrics.SuccessfulRequests.WithLabelValues("get_user_messages").Inc()
+	logger.WithField("message_count", len(messages)).Info("User messages retrieved successfully")
+
+	// Ensure empty response is always a valid JSON array
 	w.Header().Set("Content-Type", "application/json")
 	if len(messages) == 0 {
 		w.Write([]byte("[]"))
@@ -358,17 +494,28 @@ func (api *API) GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(filteredMsgs)
+
+	defer afterRequestLogging(start, r)
 }
 
 func (api *API) POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 
 	UpdateLatest(r)
 
 	username := mux.Vars(r)["username"]
 
+	logger.WithFields(logrus.Fields{
+		"method":    r.Method,
+		"path":      r.URL.Path,
+		"username":  username,
+		"remote_ip": r.RemoteAddr,
+	}).Info("POSTMessagesHandler called")
+
 	// Get user ID
 	userID, err := getUserID(db, username)
 	if err != nil || userID == 0 {
+		logger.WithField("username", username).Warn("User not found")
 		fmt.Printf("Cannot find user: %s", username)
 		http.Error(w, "Cannot find user", http.StatusNotFound)
 		return
@@ -380,6 +527,7 @@ func (api *API) POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&data); err != nil || strings.TrimSpace(data.Content) == "" {
 		w.Header().Set("Content-Type", "application/json")
+		logger.Warn("Invalid or missing content in request")
 		http.Error(w, `{"status":400, "error_msg":"Invalid or missing content"}`, http.StatusBadRequest)
 		return
 	}
@@ -395,13 +543,17 @@ func (api *API) POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	// Insert into DB
 	if err := db.Create(&message).Error; err != nil {
 		w.WriteHeader(http.StatusBadRequest)
+		logger.WithError(err).Error("Failed to insert message into database")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"status": http.StatusBadRequest,
 			"res":    err.Error(),
 		})
 		return
 	}
+
+	logger.WithField("username", username).Info("Message posted successfully")
 	api.metrics.MessagesSent.WithLabelValues("tweet").Inc()
+
 	// Successful response
 	w.WriteHeader(http.StatusNoContent)
 	api.metrics.SuccessfulRequests.WithLabelValues("tweet").Inc()
@@ -409,12 +561,23 @@ func (api *API) POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 		"status": http.StatusNoContent,
 		"res":    "",
 	})
+
+	defer afterRequestLogging(start, r)
 }
 
 func (api *API) GETUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 
 	userID := r.URL.Query().Get("user_id")
 	username := r.URL.Query().Get("username")
+
+	logger.WithFields(logrus.Fields{
+		"method":    r.Method,
+		"path":      r.URL.Path,
+		"userID":    userID,
+		"username":  username,
+		"remote_ip": r.RemoteAddr,
+	}).Info("GETUserDetailsHandler called")
 
 	var user User
 	if userID != "" {
@@ -439,6 +602,7 @@ func (api *API) GETUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// If neither user_id nor username is provided, return an error
+		logger.Warn("Missing user_id or username query parameter")
 		api.metrics.BadRequests.WithLabelValues("get_user_details").Inc()
 		http.Error(w, "Missing user_id or username query parameter", http.StatusBadRequest)
 		return
@@ -449,16 +613,30 @@ func (api *API) GETUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
 		Username: user.Username,
 		Email:    user.Email,
 	}
+
+	logger.WithFields(logrus.Fields{"userID": user.UserID, "username": user.Username}).Info("User details retrieved successfully")
 	api.metrics.SuccessfulRequests.WithLabelValues("get_user_details").Inc()
+
 	json.NewEncoder(w).Encode(userDetails)
+
+	defer afterRequestLogging(start, r)
 }
 
 func (api *API) GETFollowingHandler(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 
 	whoUsername := r.URL.Query().Get("whoUsername")
 	whomUsername := r.URL.Query().Get("whomUsername")
 	whoUsernameID, _ := getUserID(db, whoUsername)
 	whomUsernameID, _ := getUserID(db, whomUsername)
+
+	logger.WithFields(logrus.Fields{
+		"method":       r.Method,
+		"path":         r.URL.Path,
+		"whoUsername":  whoUsername,
+		"whomUsername": whomUsername,
+		"remote_ip":    r.RemoteAddr,
+	}).Info("GETFollowingHandler called")
 
 	var isFollowing bool = true
 	var follower Follower
@@ -469,15 +647,29 @@ func (api *API) GETFollowingHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		isFollowing = false // Default to false if no rows found or any error occurs
 	}
+
+	logger.WithField("is_following", isFollowing).Info("Following status retrieved successfully")
 	api.metrics.SuccessfulRequests.WithLabelValues("get_following").Inc()
+
 	json.NewEncoder(w).Encode(isFollowing)
+
+	defer afterRequestLogging(start, r)
 
 }
 
 func (api *API) PostLoginHandler(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 
 	var req LoginRequest
+
+	logger.WithFields(logrus.Fields{
+		"method":    r.Method,
+		"path":      r.URL.Path,
+		"remote_ip": r.RemoteAddr,
+	}).Info("PostLoginHandler called")
+
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		logger.WithError(err).Warn("Invalid request body received")
 		api.metrics.BadRequests.WithLabelValues("post_login").Inc()
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
@@ -487,10 +679,12 @@ func (api *API) PostLoginHandler(w http.ResponseWriter, r *http.Request) {
 	var foundUser User
 	result := db.Debug().Where("username = ?", req.Username).First(&foundUser) //db.Where("username = ?", req.Username).First(&foundUser)
 	if result.Error == gorm.ErrRecordNotFound {
+		logger.WithField("username", req.Username).Warn("Invalid login credentials")
 		api.metrics.BadRequests.WithLabelValues("post_login").Inc()
 		http.Error(w, "Invalid credentials", http.StatusNotFound)
 		return
 	} else if result.Error != nil {
+		logger.WithError(result.Error).Error("Database error during login")
 		api.metrics.BadRequests.WithLabelValues("post_login").Inc()
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
@@ -499,18 +693,30 @@ func (api *API) PostLoginHandler(w http.ResponseWriter, r *http.Request) {
 	// At this point we know that a user exists
 	// Check the password hash against the one found in the db
 	if req.Password == foundUser.PWHash {
+		logger.WithField("username", req.Username).Info("User logged in successfully")
 		api.metrics.SuccessfulRequests.WithLabelValues("post_login").Inc()
 		w.WriteHeader(http.StatusOK)
 	} else {
+		logger.WithField("username", req.Username).Warn("Invalid password attempt")
 		api.metrics.BadRequests.WithLabelValues("post_login").Inc()
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
+
+	defer afterRequestLogging(start, r)
 }
 
 func (api *API) GetFollowingMessages(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 
 	var userID = r.URL.Query().Get("userid")
+
+	logger.WithFields(logrus.Fields{
+		"method":    r.Method,
+		"path":      r.URL.Path,
+		"userID":    userID,
+		"remote_ip": r.RemoteAddr,
+	}).Info("GetFollowingMessages called")
 
 	var messages []APIMessage
 
@@ -524,6 +730,7 @@ func (api *API) GetFollowingMessages(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		fmt.Println(err.Error())
+		logger.WithError(err).Error("Failed to fetch following messages")
 		api.metrics.BadRequests.WithLabelValues("get_following_messages").Inc()
 		http.Error(w, "Query execution failed", http.StatusInternalServerError)
 		return
@@ -542,13 +749,17 @@ func (api *API) GetFollowingMessages(w http.ResponseWriter, r *http.Request) {
 		filteredMsgs = append(filteredMsgs, filteredMsg)
 	}
 	api.metrics.SuccessfulRequests.WithLabelValues("get_following_messages").Inc()
+	logger.WithField("message_count", len(messages)).Info("Following messages retrieved successfully")
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(filteredMsgs)
+
+	defer afterRequestLogging(start, r)
 
 }
 
 func main() {
-	// Create a new mux router
+	initLogger()
 	initDB()
 	store.Options = &sessions.Options{
 		Path:     "/",
@@ -559,6 +770,8 @@ func main() {
 
 	metrics := InitMetrics()      // Initialize metrics
 	api := &API{metrics: metrics} // Initialize API with metrics
+
+	// Create a new mux router
 	r := mux.NewRouter()
 
 	r.Handle("/metrics", promhttp.Handler())
