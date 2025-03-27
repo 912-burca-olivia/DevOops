@@ -10,9 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"crypto/tls"
-
-	logrustash "github.com/bshuster-repo/logrus-logstash-hook"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
 	_ "github.com/mattn/go-sqlite3"
@@ -34,24 +31,8 @@ var store = sessions.NewCookieStore([]byte("SESSION_KEY"))
 var logger = logrus.New()
 
 func initLogger() {
-	// logger.AddHook(&LogrusTCPHook{
-	// 	Address: "logstash:5044", // Logstash container address
-	// })
-	conn, err := tls.Dial("tcp", "logstash:5044", &tls.Config{RootCAs: nil})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	hook := logrustash.New(conn, logrustash.DefaultFormatter(logrus.Fields{"type": "minitwit"}))
-
-	// Add the hook to the logger
-	logger.Hooks.Add(hook)
-
-	logger.SetFormatter(&logrus.JSONFormatter{})
-
-	logger.SetOutput(os.Stdout)
-
-	logger.SetLevel(logrus.DebugLevel)
+	logrus.SetFormatter(&logrus.JSONFormatter{})
+	logrus.SetOutput(os.Stdout) // Log directly to stdout for Docker
 }
 
 type API struct {

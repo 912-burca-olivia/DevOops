@@ -7,6 +7,7 @@
     "indices": [
       {
         "names": [
+          "logs-*",
           "logs-generic-default",
           "logstash-*",
           "ecs-logstash-*"
@@ -16,7 +17,8 @@
           "create",
           "create_index",
           "manage",
-          "manage_ilm"
+          "manage_ilm",
+          "auto_configure"
         ]
       },
       {

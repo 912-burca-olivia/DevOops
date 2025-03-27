@@ -9,7 +9,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      ENDPOINT: "http://172.17.0.1:9090" #change to "http://172.17.0.1:9090" for linux
+      ENDPOINT: "http://host.docker.internal:9090" #change to "http://172.17.0.1:9090" for linux
 
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080"]
@@ -17,6 +17,8 @@ services:
       retries: 5
       start_period: 10s
       timeout: 5s
+    networks:
+      - elk
 
   api:
     build:
@@ -37,6 +39,9 @@ services:
       retries: 5
       start_period: 10s
       timeout: 5s
+    restart: unless-stopped
+    networks:
+      - elk
 
   # prometheus:
   #   image: prom/prometheus
@@ -138,12 +143,10 @@ services:
       - elasticsearch
     restart: unless-stopped
 
-  # filebeat:
-  #   extends:
-  #     file: ./filebeat/filebeat-compose.yml
-  #     service: filebeat
-
-  # uncomment if you want to use filebeat
+  filebeat:
+    extends:
+      file: ./filebeat/filebeat-compose.yml
+      service: filebeat
 
   kibana:
     build:
