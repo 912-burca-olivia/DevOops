@@ -3,7 +3,7 @@ name: Static Analysis
 on:
   push:
     branches:
-      - go_fmt
+      - static_analysis
 
   # allow manual triggers
   workflow_dispatch:
