@@ -31,8 +31,9 @@ var store = sessions.NewCookieStore([]byte("SESSION_KEY"))
 var logger = logrus.New()
 
 func initLogger() {
-	logrus.SetFormatter(&logrus.JSONFormatter{})
-	logrus.SetOutput(os.Stdout) // Log directly to stdout for Docker
+	logger.SetFormatter(&logrus.JSONFormatter{})
+	logger.SetOutput(os.Stdout)
+	logger.SetLevel(logrus.DebugLevel)
 }
 
 type API struct {
