@@ -33,7 +33,7 @@ var logger = logrus.New()
 func initLogger() {
 	logger.SetFormatter(&logrus.JSONFormatter{})
 	logger.SetOutput(os.Stdout)
-	logger.SetLevel(logrus.DebugLevel)
+	logger.SetLevel(logrus.WarnLevel)
 }
 
 type API struct {
