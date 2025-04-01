@@ -75,8 +75,18 @@ func UpdateLatest(r *http.Request) {
 	if parsedCommandID != -1 {
 		file, err := os.Create("./latest_processed_sim_action_id.txt")
 		if err == nil {
-			defer file.Close()
-			file.WriteString(strconv.Itoa(parsedCommandID))
+			defer func() {
+				err = file.Close()
+				if err != nil {
+					fmt.Print(err.Error())
+					return
+				}
+			}()
+			_, err = file.WriteString(strconv.Itoa(parsedCommandID))
+			if err != nil {
+				fmt.Print(err.Error())
+				return
+			}
 		}
 	}
 }
@@ -98,7 +108,10 @@ func (api *API) GETLatestHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	latestID_int, _ := strconv.Atoi(latestID)
-	json.NewEncoder(w).Encode(map[string]int{"latest": latestID_int})
+	err = json.NewEncoder(w).Encode(map[string]int{"latest": latestID_int})
+	if err != nil {
+		fmt.Print(err.Error())
+	}
 }
 
 func GetNumberHandler(r *http.Request) int {
@@ -146,7 +159,10 @@ func (api *API) GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := map[string][]string{"follows": followers}
-	json.NewEncoder(w).Encode(response)
+	err = json.NewEncoder(w).Encode(response)
+	if err != nil {
+		fmt.Print(err.Error())
+	}
 
 }
 
@@ -166,7 +182,11 @@ func (api *API) POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 
 	var data map[string]interface{}
 
-	json.NewDecoder(r.Body).Decode(&data)
+	err = json.NewDecoder(r.Body).Decode(&data)
+	if err != nil {
+		fmt.Print(err.Error())
+		return
+	}
 
 	if followsUsername, exists := data["follow"]; exists {
 		followsUserID, _ := getUserID(db, followsUsername.(string))
@@ -187,7 +207,11 @@ func (api *API) POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		api.metrics.FollowRequests.WithLabelValues("follow").Inc()
-		json.NewEncoder(w).Encode(data)
+		err = json.NewEncoder(w).Encode(data)
+		if err != nil {
+			fmt.Print(err.Error())
+			return
+		}
 		return
 	} else if unfollowsUsername, exists := data["unfollow"]; exists {
 		unfollowsUserID, _ := getUserID(db, unfollowsUsername.(string))
@@ -205,7 +229,11 @@ func (api *API) POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		api.metrics.UnfollowRequests.WithLabelValues("unfollow").Inc()
-		json.NewEncoder(w).Encode(data)
+		err = json.NewEncoder(w).Encode(data)
+		if err != nil {
+			fmt.Print(err.Error())
+			return
+		}
 		return
 	}
 
@@ -218,7 +246,11 @@ func (api *API) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	var error = ""
 
 	var data map[string]interface{}
-	json.NewDecoder(r.Body).Decode(&data)
+	err = json.NewDecoder(r.Body).Decode(&data)
+	if err != nil {
+		fmt.Print(err.Error())
+		return
+	}
 
 	username := data["username"].(string)
 	email := data["email"].(string)
@@ -264,7 +296,11 @@ func (api *API) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		"status":    status,
 		"error_msg": error,
 	}
-	json.NewEncoder(w).Encode(response)
+	err = json.NewEncoder(w).Encode(response)
+	if err != nil {
+		fmt.Print(err.Error())
+		return
+	}
 }
 
 func (api *API) GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
@@ -289,7 +325,10 @@ func (api *API) GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	api.metrics.SuccessfulRequests.WithLabelValues("msgs").Inc()
 	w.Header().Set("Content-Type", "application/json")
 	if len(messages) == 0 {
-		w.Write([]byte("[]"))
+		_, err = w.Write([]byte("[]"))
+		if err != nil {
+			fmt.Print(err.Error())
+		}
 		return
 	}
 
@@ -304,7 +343,10 @@ func (api *API) GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 		filteredMsgs = append(filteredMsgs, filteredMsg)
 	}
 
-	json.NewEncoder(w).Encode(filteredMsgs)
+	err = json.NewEncoder(w).Encode(filteredMsgs)
+	if err != nil {
+		fmt.Print(err.Error())
+	}
 }
 
 func (api *API) GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
@@ -341,7 +383,10 @@ func (api *API) GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	api.metrics.SuccessfulRequests.WithLabelValues("get_user_messages").Inc()
 	w.Header().Set("Content-Type", "application/json")
 	if len(messages) == 0 {
-		w.Write([]byte("[]"))
+		_, err = w.Write([]byte("[]"))
+		if err != nil {
+			fmt.Print(err.Error())
+		}
 		return
 	}
 
@@ -357,7 +402,10 @@ func (api *API) GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(filteredMsgs)
+	err = json.NewEncoder(w).Encode(filteredMsgs)
+	if err != nil {
+		fmt.Print(err.Error())
+	}
 }
 
 func (api *API) POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
@@ -395,20 +443,26 @@ func (api *API) POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	// Insert into DB
 	if err := db.Create(&message).Error; err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		err = json.NewEncoder(w).Encode(map[string]interface{}{
 			"status": http.StatusBadRequest,
 			"res":    err.Error(),
 		})
+		if err != nil {
+			fmt.Print(err.Error())
+		}
 		return
 	}
 	api.metrics.MessagesSent.WithLabelValues("tweet").Inc()
 	// Successful response
 	w.WriteHeader(http.StatusNoContent)
 	api.metrics.SuccessfulRequests.WithLabelValues("tweet").Inc()
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	err = json.NewEncoder(w).Encode(map[string]interface{}{
 		"status": http.StatusNoContent,
 		"res":    "",
 	})
+	if err != nil {
+		fmt.Print(err.Error())
+	}
 }
 
 func (api *API) GETUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
@@ -450,7 +504,10 @@ func (api *API) GETUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
 		Email:    user.Email,
 	}
 	api.metrics.SuccessfulRequests.WithLabelValues("get_user_details").Inc()
-	json.NewEncoder(w).Encode(userDetails)
+	err = json.NewEncoder(w).Encode(userDetails)
+	if err != nil {
+		fmt.Print(err.Error())
+	}
 }
 
 func (api *API) GETFollowingHandler(w http.ResponseWriter, r *http.Request) {
@@ -460,7 +517,7 @@ func (api *API) GETFollowingHandler(w http.ResponseWriter, r *http.Request) {
 	whoUsernameID, _ := getUserID(db, whoUsername)
 	whomUsernameID, _ := getUserID(db, whomUsername)
 
-	var isFollowing bool = true
+	var isFollowing = true
 	var follower Follower
 	err = db.Model(&Follower{}).
 		Where("who_id = ? AND whom_id = ?", whoUsernameID, whomUsernameID).
@@ -470,8 +527,10 @@ func (api *API) GETFollowingHandler(w http.ResponseWriter, r *http.Request) {
 		isFollowing = false // Default to false if no rows found or any error occurs
 	}
 	api.metrics.SuccessfulRequests.WithLabelValues("get_following").Inc()
-	json.NewEncoder(w).Encode(isFollowing)
-
+	err = json.NewEncoder(w).Encode(isFollowing)
+	if err != nil {
+		fmt.Print(err.Error())
+	}
 }
 
 func (api *API) PostLoginHandler(w http.ResponseWriter, r *http.Request) {
@@ -543,8 +602,10 @@ func (api *API) GetFollowingMessages(w http.ResponseWriter, r *http.Request) {
 	}
 	api.metrics.SuccessfulRequests.WithLabelValues("get_following_messages").Inc()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(filteredMsgs)
-
+	err = json.NewEncoder(w).Encode(filteredMsgs)
+	if err != nil {
+		fmt.Print(err.Error())
+	}
 }
 
 func main() {

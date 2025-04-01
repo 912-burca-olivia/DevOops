@@ -5,8 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
-
+	//"os"
 	"gorm.io/gorm"
 )
 
@@ -51,13 +50,13 @@ func initDB() {
 	fmt.Println("Database initialized successfully")
 }
 
-func fileExists(filename string) bool {
-	info, err := os.Stat(filename)
-	if os.IsNotExist(err) {
-		return false
-	}
-	return !info.IsDir()
-}
+// func fileExists(filename string) bool {
+// 	info, err := os.Stat(filename)
+// 	if os.IsNotExist(err) {
+// 		return false
+// 	}
+// 	return !info.IsDir()
+// }
 
 func NotReqFromSimulator(w http.ResponseWriter, r *http.Request) bool {
 	fromSimulator := r.Header.Get("Authorization")
@@ -67,7 +66,11 @@ func NotReqFromSimulator(w http.ResponseWriter, r *http.Request) bool {
 			"status":    http.StatusForbidden,
 			"error_msg": "You are not authorized to use this resource!",
 		}
-		json.NewEncoder(w).Encode(response)
+		err := json.NewEncoder(w).Encode(response)
+		if err != nil {
+			fmt.Print(err.Error())
+			return false
+		}
 		return true
 	}
 	return false
