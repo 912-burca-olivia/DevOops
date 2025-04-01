@@ -1,0 +1,133 @@
+name: Continuous Integration with Static Analysis
+
+on:
+  push:
+    branches:
+      #- main
+      - go_fmt
+
+  # allow manual triggers
+  workflow_dispatch:
+    manual: true
+
+jobs:
+  gofmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use go formatter on project
+        run: gofmt -s -w .
+    
+      - name: Check for gofmt changes
+        run: git diff --exit-code #returns 0 if gofmt did not make a change
+        continue-on-error: true #allows next step even if 1 or error is returned
+
+      - name: Fail on gofmt changes 
+        if: ${{ failure() }}
+        run: |     #i cannot see where this echos to?
+          echo "gofmt found changes. Please format your code."
+          exit 1 
+
+  golangci:
+    runs-on: ubuntu-latest
+    needs: gofmt
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.0
+
+  build:
+    runs-on: ubuntu-latest
+    needs: golangci
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push devoops-app image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./itu-minitwit/dockerfile
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/devoops-app:latest
+          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/devoops-app:webbuildcache
+          cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/devoops-app:webbuildcache,mode=max
+
+      - name: Build and push devoops-api image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./itu-minitwit-api/dockerfile
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/devoops-api:latest
+          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/devoops-api:mysqlbuildcache
+          cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/devoops-api:mysqlbuildcache,mode=max
+
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Run test stack via Docker Compose
+        run: |
+          docker compose -f docker-compose_test_local.yml up --abort-on-container-exit --exit-code-from test_runner
+
+      - name: Tear down test stack
+        if: always()
+        run: docker compose -f docker-compose_test_local.yml down -v
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Add SSH key to known_hosts
+        run: |
+          echo "SSH_HOST is: $SSH_HOST"
+          mkdir -p ~/.ssh
+          ssh-keyscan -H $SSH_HOST >> ~/.ssh/known_hosts
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+
+      - name: Configure SSH
+        run: |
+          echo "$SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+        env:
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+      - name: Deploy to server
+
+        run: |
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST "
+            source ~/.bash_profile && \
+            cd /home/vagrant/DevOops && \
+            docker compose -f docker-compose.yml pull && \
+            docker compose -f docker-compose.yml up -d
+          "
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
