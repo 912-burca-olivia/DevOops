@@ -47,8 +47,15 @@ func InitMetrics() *Metrics {
 			},
 			[]string{"path"},
 		),
+		UserNotFound: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "Users_not_found",
+				Help: "Total number of requests failing because of missing users",
+			},
+			[]string{"path"},
+		),
 	}
-
+	prometheus.MustRegister(m.UserNotFound)
 	prometheus.MustRegister(m.SuccessfulRequests)
 	prometheus.MustRegister(m.BadRequests)
 	prometheus.MustRegister(m.FollowRequests)
