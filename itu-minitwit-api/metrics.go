@@ -58,7 +58,7 @@ func InitMetrics() *Metrics {
 			[]string{"path"},
 		),
 	}
-
+	prometheus.MustRegister(m.UserNotFound)
 	prometheus.MustRegister(m.SuccessfulRequests)
 	prometheus.MustRegister(m.BadRequests)
 	prometheus.MustRegister(m.FollowRequests)
