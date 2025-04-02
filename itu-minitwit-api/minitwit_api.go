@@ -119,7 +119,7 @@ func (api *API) GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
 	UpdateLatest(r)
 	vars := mux.Vars(r)
 
-	userID, _ := getUserID(db, vars["username"])
+	userID, _ := api.getUserID(db, vars["username"])
 
 	if userID == 0 {
 		api.metrics.BadRequests.WithLabelValues("get_follower").Inc()
@@ -156,7 +156,7 @@ func (api *API) POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 
-	userID, _ := getUserID(db, vars["username"])
+	userID, _ := api.getUserID(db, vars["username"])
 
 	if userID == 0 {
 		api.metrics.BadRequests.WithLabelValues("post_follower").Inc()
@@ -169,7 +169,7 @@ func (api *API) POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewDecoder(r.Body).Decode(&data)
 
 	if followsUsername, exists := data["follow"]; exists {
-		followsUserID, _ := getUserID(db, followsUsername.(string))
+		followsUserID, _ := api.getUserID(db, followsUsername.(string))
 		if followsUserID == 0 {
 			api.metrics.BadRequests.WithLabelValues("post_follower").Inc()
 			http.Error(w, "The user you are trying to follow cannot be found", http.StatusNotFound)
@@ -190,7 +190,7 @@ func (api *API) POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(data)
 		return
 	} else if unfollowsUsername, exists := data["unfollow"]; exists {
-		unfollowsUserID, _ := getUserID(db, unfollowsUsername.(string))
+		unfollowsUserID, _ := api.getUserID(db, unfollowsUsername.(string))
 		if unfollowsUserID == 0 {
 			api.metrics.BadRequests.WithLabelValues("post_follower").Inc()
 			http.Error(w, "The user you are trying to unfollow cannot be found", http.StatusNotFound)
@@ -234,7 +234,7 @@ func (api *API) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		error = "You have to enter a password"
 	} else {
 		// Check if the username is already taken
-		userId, _ := getUserID(db, username)
+		userId, _ := api.getUserID(db, username)
 
 		if userId != 0 {
 			error = "The username is already taken"
@@ -314,7 +314,7 @@ func (api *API) GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	username := mux.Vars(r)["username"]
 
 	// Get user ID
-	userID, err := getUserID(db, username)
+	userID, err := api.getUserID(db, username)
 	if err != nil || userID == 0 {
 		fmt.Printf("Cannot find user: %s", username)
 		http.Error(w, "Cannot find user", http.StatusNotFound)
@@ -367,7 +367,7 @@ func (api *API) POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	username := mux.Vars(r)["username"]
 
 	// Get user ID
-	userID, err := getUserID(db, username)
+	userID, err := api.getUserID(db, username)
 	if err != nil || userID == 0 {
 		fmt.Printf("Cannot find user: %s", username)
 		http.Error(w, "Cannot find user", http.StatusNotFound)
@@ -457,8 +457,8 @@ func (api *API) GETFollowingHandler(w http.ResponseWriter, r *http.Request) {
 
 	whoUsername := r.URL.Query().Get("whoUsername")
 	whomUsername := r.URL.Query().Get("whomUsername")
-	whoUsernameID, _ := getUserID(db, whoUsername)
-	whomUsernameID, _ := getUserID(db, whomUsername)
+	whoUsernameID, _ := api.getUserID(db, whoUsername)
+	whomUsernameID, _ := api.getUserID(db, whomUsername)
 
 	var isFollowing bool = true
 	var follower Follower

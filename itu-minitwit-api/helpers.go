@@ -17,11 +17,12 @@ func Error() string {
 }
 
 // getUserID retrieves the user_id for a given username.
-func getUserID(db *gorm.DB, username string) (uint, error) {
+func (api API) getUserID(db *gorm.DB, username string) (uint, error) {
 	var user User
 	result := db.Select("user_id").Where("username = ?", username).First(&user)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
+			api.metrics.UserNotFound.WithLabelValues("Users_not_found").Inc()
 			return 0, nil // user not found
 		}
 		return 0, result.Error
