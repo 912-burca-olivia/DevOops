@@ -1,12 +1,13 @@
-name: Continuous Integration with Static Analysis
+#the purpose of this workflow is to catch code that does not work sooner. 
+#the pull request will not merge if your new feature is not formatted, linted and unit-tested.
+#this way of working can be combined with a future VSCode enviroment in the repo, 
+#ensures that everyone has same tools and that checks happen along the way and not at the end of a big push. 
+
+name: Continuous Check
 
 on:
-  push:
-    branches:
-      #- main
-      - go_fmt
-
-  # allow manual triggers
+  pull_request:
+  
   workflow_dispatch:
     manual: true
 
@@ -14,7 +15,9 @@ jobs:
   gofmt:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4 
+        with:
+          fetch-depth: 0 
 
       - name: Use go formatter on project
         run: gofmt -s -w .
@@ -28,10 +31,10 @@ jobs:
         run: |     #i cannot see where this echos to?
           echo "gofmt found changes. Please format your code."
           exit 1 
+        #if this step fails, run $gofmt -s -w . from DevOops folder, commit and try again.
 
   golangci:
     runs-on: ubuntu-latest
-    needs: gofmt
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -42,3 +45,8 @@ jobs:
         uses: golangci/golangci-lint-action@v7
         with:
           version: v2.0
+
+      #TODO: there is a caching warning when you run this which I have not managed to resolve.
+
+  #TODO: add docker linter 
+  #TODO: add Unit tests to this workflow

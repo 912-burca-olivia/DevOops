@@ -6,7 +6,7 @@ name: Go Formatting
 on:
   push:
     branches:
-      - go_fmt
+      - go_fmt #change to correct branch
 
   # allow manual triggers
   workflow_dispatch:
