@@ -1,9 +1,9 @@
 package main
 
 type Message struct {
-	Text string `json:"content"`
-	PubDate string `json:"pub_date"`
-	Username    string `json:"user"`
+	Text     string `json:"content"`
+	PubDate  string `json:"pub_date"`
+	Username string `json:"user"`
 }
 
 type UserDetails struct {
@@ -11,5 +11,3 @@ type UserDetails struct {
 	Username string `json:"username"`
 	Email    string `json:"email"`
 }
-
-

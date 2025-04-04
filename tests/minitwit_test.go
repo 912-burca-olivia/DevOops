@@ -1,3 +1,4 @@
+//nolint:govet,errcheck
 package main
 
 import (

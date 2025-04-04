@@ -1,0 +1,36 @@
+#if this workflow fails on "Fail on gofmt changes" 
+#then run $gofmt -s -w . from DevOops folder, commit and try again.
+
+name: Go Formatting
+
+on:
+  push:
+    branches:
+      - go_fmt #change to correct branch
+
+  # allow manual triggers
+  workflow_dispatch:
+    manual: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Use go formatter on project
+        run: gofmt -s -w .
+    
+      - name: Check for gofmt changes
+        run: git diff --exit-code #returns 0 if gofmt did not make a change
+        continue-on-error: true #allows next step even if 1 or error is returned
+
+      - name: Fail on gofmt changes 
+        if: ${{ failure() }}
+        run: |
+          echo "gofmt found changes. Please format your code."
+          exit 1 

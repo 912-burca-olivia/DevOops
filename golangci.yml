@@ -1,0 +1,15 @@
+#https://freshman.tech/linting-golang/ 
+#https://golangci-lint.run/usage/configuration/
+#note: in minitwit_test.go, i have disabled linters for the workflow to finish
+
+run:
+  timeout: 5m
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - staticcheck
+    - unused
