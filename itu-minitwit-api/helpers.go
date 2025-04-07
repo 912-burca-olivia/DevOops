@@ -22,8 +22,12 @@ func (api API) getUserID(db *gorm.DB, username string) (uint, error) {
 	result := db.Select("user_id").Where("username = ?", username).First(&user)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
-			api.metrics.UserNotFound.WithLabelValues("Users_not_found").Inc()
-			return 0, nil // user not found
+			// dummy workaround to get rid of errors caused by old api downtime
+
+			return createDummyUser(api, username)
+
+			// api.metrics.UserNotFound.WithLabelValues("Users_not_found").Inc()
+			// return 0, nil // user not found
 		}
 		return 0, result.Error
 	}
