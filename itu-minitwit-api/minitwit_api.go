@@ -64,6 +64,20 @@ func FormatDateTime(timestamp int64) string {
 	return t.Format("Jan 2, 2006 at 3:04PM")
 }
 
+func createDummyUser(api API, username string) (uint, error) {
+	// dummy workaround to get rid of errors caused by old api downtime
+
+	// Insert new user into the database
+	newUser := User{Username: username, Email: username + "@gmail.com", PWHash: "dummy"}
+	err := db.Create(&newUser).Error
+	if err != nil {
+		log.Println("Error inserting user:", err)
+		return 0, err
+	}
+	log.Println("Added dummy user: ", newUser)
+	return api.getUserID(db, username)
+}
+
 func UpdateLatest(r *http.Request) {
 	parsedCommandID := -1
 	if latestParam := r.URL.Query().Get("latest"); latestParam != "" {
@@ -569,8 +583,6 @@ func main() {
 	metrics := InitMetrics()      // Initialize metrics
 	api := &API{metrics: metrics} // Initialize API with metrics
 	r := mux.NewRouter()
-
-
 
 	r.Handle("/metrics", promhttp.Handler())
 	// Define the routes and their handlers
