@@ -22,12 +22,16 @@ require (
 )
 
 require (
+	github.com/bshuster-repo/logrus-logstash-hook v1.1.0
+	github.com/cheshir/logrus-logstash-hook v0.0.0-20230213210745-aca6961b250d
 	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/mattn/go-sqlite3 v1.14.24 // indirect
 	github.com/prometheus/client_golang v1.21.1
+	github.com/sirupsen/logrus v1.9.3
+	github.com/ylamothe/logrustash v0.0.0-20170628144031-13b8689a7028
 	golang.org/x/crypto v0.33.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
 	gorm.io/driver/postgres v1.5.11
