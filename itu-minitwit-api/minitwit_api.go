@@ -176,12 +176,12 @@ func GetNumberHandler(r *http.Request) int {
 }
 
 func (api *API) GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
-	defer afterRequestLogging(start, r)
-
+	
 	//number of requested followers
 	rowNums := GetNumberHandler(r)
-
+	
 	start := time.Now()
+	defer afterRequestLogging(start, r)
 
 	logger.WithFields(logrus.Fields{
 		"method":    r.Method,
@@ -699,7 +699,8 @@ func (api *API) PostLoginHandler(w http.ResponseWriter, r *http.Request) {
 
 func (api *API) GetFollowingMessages(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-
+	defer afterRequestLogging(start, r)
+	
 	var userID = r.URL.Query().Get("userid")
 
 	logger.WithFields(logrus.Fields{
