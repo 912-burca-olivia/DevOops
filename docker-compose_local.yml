@@ -9,7 +9,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      ENDPOINT: "http://minitwit_api:7070" #change to "http://172.17.0.1:7070" for linux
+      ENDPOINT: "http://host.docker.internal:9090" #change to "http://172.17.0.1:9090" for linux
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080"]
       interval: 10s
@@ -25,14 +25,14 @@ services:
       dockerfile: local/Dockerfile
     container_name: minitwit_api
     ports:
-      - "7070:7070"
+      - "9090:9090"
     volumes:
       - ./minitwit.db:/app/minitwit.db
     environment:
       DATABASE: "/app/minitwit.db"
-      PORT: ":7070"
+      PORT: ":9090"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7070/msgs"]
+      test: ["CMD", "curl", "-f", "http://localhost:9090/msgs"]
       interval: 10s
       retries: 5
       start_period: 10s
@@ -49,7 +49,7 @@ services:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
     command: --config.file=/etc/prometheus/prometheus.yml
     ports:
-      - "9090:9090" # Host port 9191, container port 9090
+      - "9091:9090" # Host port 9191, container port 9090
 
   grafana:
     image: grafana/grafana
