@@ -133,6 +133,7 @@ func UpdateLatest(r *http.Request) {
 
 func (api *API) GETLatestHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
+	defer afterRequestLogging(start, r)
 
 	logger.WithFields(logrus.Fields{
 		"method": r.Method,
@@ -162,7 +163,6 @@ func (api *API) GETLatestHandler(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(map[string]int{"latest": latestID_int})
 
-	defer afterRequestLogging(start, r)
 }
 
 func GetNumberHandler(r *http.Request) int {
@@ -176,6 +176,7 @@ func GetNumberHandler(r *http.Request) int {
 }
 
 func (api *API) GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
+	defer afterRequestLogging(start, r)
 
 	//number of requested followers
 	rowNums := GetNumberHandler(r)
@@ -219,18 +220,18 @@ func (api *API) GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Query execution failed", http.StatusInternalServerError)
 		return
 	}
-
+	
 	logger.WithField("follower_count", len(followers)).Info("Followers retrieved successfully")
 	response := map[string][]string{"follows": followers}
 	json.NewEncoder(w).Encode(response)
-
-	defer afterRequestLogging(start, r)
-
+	
+	
 }
 
 func (api *API) POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-
+	defer afterRequestLogging(start, r)
+	
 	UpdateLatest(r)
 
 	vars := mux.Vars(r)
@@ -296,12 +297,12 @@ func (api *API) POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(data)
 		return
 	}
-	defer afterRequestLogging(start, r)
 
 }
 
 func (api *API) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
+	defer afterRequestLogging(start, r)
 
 	UpdateLatest(r) // Updater the latest parameter
 
@@ -366,12 +367,12 @@ func (api *API) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewEncoder(w).Encode(response)
 
-	defer afterRequestLogging(start, r)
 }
 
 func (api *API) GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-
+	defer afterRequestLogging(start, r)
+	
 	UpdateLatest(r)
 
 	logger.WithFields(logrus.Fields{
@@ -419,13 +420,12 @@ func (api *API) GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(filteredMsgs)
-
-	defer afterRequestLogging(start, r)
 }
 
 func (api *API) GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-
+	defer afterRequestLogging(start, r)
+	
 	UpdateLatest(r)
 
 	username := mux.Vars(r)["username"]
@@ -487,11 +487,11 @@ func (api *API) GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(filteredMsgs)
 
-	defer afterRequestLogging(start, r)
 }
 
 func (api *API) POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
+	defer afterRequestLogging(start, r)
 
 	UpdateLatest(r)
 
@@ -554,12 +554,12 @@ func (api *API) POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 		"res":    "",
 	})
 
-	defer afterRequestLogging(start, r)
 }
 
 func (api *API) GETUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-
+	defer afterRequestLogging(start, r)
+	
 	userID := r.URL.Query().Get("user_id")
 	username := r.URL.Query().Get("username")
 
@@ -611,11 +611,11 @@ func (api *API) GETUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(userDetails)
 
-	defer afterRequestLogging(start, r)
 }
 
 func (api *API) GETFollowingHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
+	defer afterRequestLogging(start, r)
 
 	whoUsername := r.URL.Query().Get("whoUsername")
 	whomUsername := r.URL.Query().Get("whomUsername")
@@ -645,12 +645,12 @@ func (api *API) GETFollowingHandler(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(isFollowing)
 
-	defer afterRequestLogging(start, r)
 
 }
 
 func (api *API) PostLoginHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
+	defer afterRequestLogging(start, r)
 
 	var req LoginRequest
 
@@ -695,7 +695,6 @@ func (api *API) PostLoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	defer afterRequestLogging(start, r)
 }
 
 func (api *API) GetFollowingMessages(w http.ResponseWriter, r *http.Request) {
