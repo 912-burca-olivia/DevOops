@@ -22,6 +22,7 @@ import (
 
 // const DATABASE = "../minitwit.db"
 const PER_PAGE = 30
+const USER_NOT_FOUND = "User not found"
 
 var db *gorm.DB
 var err error
@@ -194,7 +195,7 @@ func (api *API) GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
 	userID, _ := api.getUserID(db, vars["username"])
 
 	if userID == 0 {
-		logger.WithField("username", vars["username"]).Warn("User not found")
+		logger.WithField("username", vars["username"]).Warn(USER_NOT_FOUND)
 		api.metrics.BadRequests.WithLabelValues("get_follower").Inc()
 		http.Error(w, "Cannot find user", http.StatusNotFound)
 		return
@@ -237,7 +238,7 @@ func (api *API) POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 	userID, _ := api.getUserID(db, vars["username"])
 
 	if userID == 0 {
-		logger.Warn("User not found", logrus.Fields{"username": vars["username"]})
+		logger.Warn(USER_NOT_FOUND, logrus.Fields{"username": vars["username"]})
 		api.metrics.BadRequests.WithLabelValues("post_follower").Inc()
 		http.Error(w, "Cannot find user", http.StatusNotFound)
 		return
@@ -439,7 +440,7 @@ func (api *API) GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	// Get user ID
 	userID, err := api.getUserID(db, username)
 	if err != nil || userID == 0 {
-		logger.WithField("username", username).Warn("User not found")
+		logger.WithField("username", username).Warn(USER_NOT_FOUND)
 		fmt.Printf("Cannot find user: %s", username)
 		http.Error(w, "Cannot find user", http.StatusNotFound)
 		api.metrics.BadRequests.WithLabelValues("get_user_messages").Inc()
@@ -506,7 +507,7 @@ func (api *API) POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	// Get user ID
 	userID, err := api.getUserID(db, username)
 	if err != nil || userID == 0 {
-		logger.WithField("username", username).Warn("User not found")
+		logger.WithField("username", username).Warn(USER_NOT_FOUND)
 		fmt.Printf("Cannot find user: %s", username)
 		http.Error(w, "Cannot find user", http.StatusNotFound)
 		return
@@ -575,7 +576,7 @@ func (api *API) GETUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
 		result := db.Where("user_id = ?", userID).First(&user)
 		if result.Error != nil {
 			if result.Error == gorm.ErrRecordNotFound {
-				http.Error(w, "User not found", http.StatusNotFound)
+				http.Error(w, USER_NOT_FOUND, http.StatusNotFound)
 			} else {
 				http.Error(w, "Database error: "+result.Error.Error(), http.StatusInternalServerError)
 			}
@@ -585,7 +586,7 @@ func (api *API) GETUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
 		result := db.Where("username = ?", username).First(&user)
 		if result.Error != nil {
 			if result.Error == gorm.ErrRecordNotFound {
-				http.Error(w, "User not found", http.StatusNotFound)
+				http.Error(w, USER_NOT_FOUND, http.StatusNotFound)
 			} else {
 				http.Error(w, "Database error: "+result.Error.Error(), http.StatusInternalServerError)
 			}
