@@ -16,8 +16,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4 
-        with:
-          fetch-depth: 0 
 
       - name: Use go formatter on project
         run: gofmt -s -w .
@@ -47,6 +45,17 @@ jobs:
           version: v2.0
 
       #TODO: there is a caching warning when you run this which I have not managed to resolve.
+  
+  dockerfilelint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-  #TODO: add docker linter 
+
+      - name: install dockerfilelint
+        run: npm install -g dockerfilelint
+      
+      - name: lint all dockerfiles 
+        run: dockerfilelint Dockerfile-minitwit-tests */Dockerfile 
+
   #TODO: add Unit tests to this workflow

@@ -5,7 +5,7 @@ FROM python:3.11-slim
 WORKDIR /tests
 
 # Install system dependencies for Selenium, SQLite, curl, and wget
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install --no-install-recommends -y \
     firefox-esr \
     wget \
     curl \

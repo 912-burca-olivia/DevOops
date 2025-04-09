@@ -235,7 +235,6 @@ func (api *API) GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
 	
 	logger.WithField("follower_count", len(followers)).Info("Followers retrieved successfully")
 	response := map[string][]string{"follows": followers}
-<<<<<<< HEAD
 	err = json.NewEncoder(w).Encode(response)
 	if err != nil {
 		fmt.Print(err.Error())
@@ -401,22 +400,18 @@ func (api *API) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		"status":    status,
 		"error_msg": error,
 	}
-<<<<<<< HEAD
+	
 	err = json.NewEncoder(w).Encode(response)
 	if err != nil {
 		fmt.Print(err.Error())
 		return
 	}
-=======
-	json.NewEncoder(w).Encode(response)
-
->>>>>>> origin/main
 }
 
 func (api *API) GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	defer afterRequestLogging(start, r)
-	
+		
 	UpdateLatest(r)
 
 	logger.WithFields(logrus.Fields{
@@ -538,15 +533,11 @@ func (api *API) GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-<<<<<<< HEAD
+	
 	err = json.NewEncoder(w).Encode(filteredMsgs)
 	if err != nil {
 		fmt.Print(err.Error())
 	}
-=======
-	json.NewEncoder(w).Encode(filteredMsgs)
-
->>>>>>> origin/main
 }
 
 func (api *API) POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
@@ -595,12 +586,8 @@ func (api *API) POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	// Insert into DB
 	if err := db.Create(&message).Error; err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-<<<<<<< HEAD
-		err = json.NewEncoder(w).Encode(map[string]interface{}{
-=======
 		logger.WithError(err).Error("Failed to insert message into database")
-		json.NewEncoder(w).Encode(map[string]interface{}{
->>>>>>> origin/main
+		err = json.NewEncoder(w).Encode(map[string]interface{}{
 			"status": http.StatusBadRequest,
 			"res":    err.Error(),
 		})
@@ -620,13 +607,9 @@ func (api *API) POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 		"status": http.StatusNoContent,
 		"res":    "",
 	})
-<<<<<<< HEAD
 	if err != nil {
 		fmt.Print(err.Error())
 	}
-=======
-
->>>>>>> origin/main
 }
 
 func (api *API) GETUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
@@ -681,16 +664,10 @@ func (api *API) GETUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
 
 	logger.WithFields(logrus.Fields{"userID": user.UserID, "username": user.Username}).Info("User details retrieved successfully")
 	api.metrics.SuccessfulRequests.WithLabelValues("get_user_details").Inc()
-<<<<<<< HEAD
 	err = json.NewEncoder(w).Encode(userDetails)
 	if err != nil {
 		fmt.Print(err.Error())
 	}
-=======
-
-	json.NewEncoder(w).Encode(userDetails)
-
->>>>>>> origin/main
 }
 
 func (api *API) GETFollowingHandler(w http.ResponseWriter, r *http.Request) {
@@ -702,9 +679,6 @@ func (api *API) GETFollowingHandler(w http.ResponseWriter, r *http.Request) {
 	whoUsernameID, _ := api.getUserID(db, whoUsername)
 	whomUsernameID, _ := api.getUserID(db, whomUsername)
 
-<<<<<<< HEAD
-	var isFollowing = true
-=======
 	logger.WithFields(logrus.Fields{
 		"method":       r.Method,
 		"path":         r.URL.Path,
@@ -714,7 +688,6 @@ func (api *API) GETFollowingHandler(w http.ResponseWriter, r *http.Request) {
 	}).Info("GETFollowingHandler called")
 
 	var isFollowing bool = true
->>>>>>> origin/main
 	var follower Follower
 	err = db.Model(&Follower{}).
 		Where("who_id = ? AND whom_id = ?", whoUsernameID, whomUsernameID).
@@ -726,17 +699,10 @@ func (api *API) GETFollowingHandler(w http.ResponseWriter, r *http.Request) {
 
 	logger.WithField("is_following", isFollowing).Info("Following status retrieved successfully")
 	api.metrics.SuccessfulRequests.WithLabelValues("get_following").Inc()
-<<<<<<< HEAD
 	err = json.NewEncoder(w).Encode(isFollowing)
 	if err != nil {
 		fmt.Print(err.Error())
 	}
-=======
-
-	json.NewEncoder(w).Encode(isFollowing)
-
-
->>>>>>> origin/main
 }
 
 func (api *API) PostLoginHandler(w http.ResponseWriter, r *http.Request) {
@@ -845,6 +811,13 @@ func getPort() {
 	port = os.Getenv("PORT")
 	if port == "" {
 		port = ":9090"
+	}
+}
+
+func CheckResponse(w http.ResponseWriter, response map[string][]string) {
+	err = json.NewEncoder(w).Encode(response)
+	if err != nil {
+		fmt.Print(err.Error())
 	}
 }
 
