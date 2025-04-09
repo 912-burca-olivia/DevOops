@@ -1,27 +1,29 @@
-services:
+version: "3.8"
 
-  api:
-    image: ${DOCKER_USERNAME}/devoops-api:latest
-    container_name: minitwit_api
-    env_file:
-      - .env
+services:
+  app:
+    image: ${DOCKER_USERNAME}/devoops-app:latest
+    container_name: minitwit_app
     ports:
-      - '9090:9090'
+      - "8080:8080"
+    environment:
+      ENDPOINT: "http://host.docker.internal:9090"
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:9090/msgs" ]
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
       interval: 10s
       retries: 5
       start_period: 10s
       timeout: 5s
-  app:
-    image: ${DOCKER_USERNAME}/devoops-app:latest
-    container_name: minitwit_app
-    environment:
-      ENDPOINT: "http://host.docker.internal:9090"
+
+  api:
+    image: ${DOCKER_USERNAME}/devoops-api:latest
+    container_name: minitwit_api
     ports:
-      - '8080:8080'
+      - "9090:9090"
+    env_file:
+      - .env
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8080" ]
+      test: ["CMD", "curl", "-f", "http://localhost:9090/msgs"]
       interval: 10s
       retries: 5
       start_period: 10s

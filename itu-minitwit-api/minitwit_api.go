@@ -170,11 +170,12 @@ func (api *API) GETLatestHandler(w http.ResponseWriter, r *http.Request) {
 	logger.WithFields(logrus.Fields{
 		"latest_id": latestID_int,
 	}).Info("Successfully retrieved latest action ID")
-	
-	err = json.NewEncoder(w).Encode(map[string]int{"latest": latestID_int})
-	if err != nil {
-		fmt.Print(err.Error())
-	}
+
+	CheckEncodeResponse(w, map[string]int{"latest": latestID_int}, http.StatusCreated)
+	// err = json.NewEncoder(w).Encode(map[string]int{"latest": latestID_int})
+	// if err != nil {
+	// 	fmt.Print(err.Error())
+	// }
 }
 
 func GetNumberHandler(r *http.Request) int {
@@ -188,10 +189,10 @@ func GetNumberHandler(r *http.Request) int {
 }
 
 func (api *API) GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
-	
+
 	//number of requested followers
 	rowNums := GetNumberHandler(r)
-	
+
 	start := time.Now()
 	defer afterRequestLogging(start, r)
 
@@ -232,25 +233,20 @@ func (api *API) GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Query execution failed", http.StatusInternalServerError)
 		return
 	}
-	
+
 	logger.WithField("follower_count", len(followers)).Info("Followers retrieved successfully")
 	response := map[string][]string{"follows": followers}
-	err = json.NewEncoder(w).Encode(response)
-	if err != nil {
-		fmt.Print(err.Error())
-	}
-
-=======
-	json.NewEncoder(w).Encode(response)
-	
-	
->>>>>>> origin/main
+	CheckEncodeResponse(w, response, http.StatusOK)
+	// err = json.NewEncoder(w).Encode(response)
+	// if err != nil {
+	// 	fmt.Print(err.Error())
+	// }
 }
 
 func (api *API) POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	defer afterRequestLogging(start, r)
-	
+
 	UpdateLatest(r)
 
 	vars := mux.Vars(r)
@@ -266,6 +262,7 @@ func (api *API) POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 
 	var data map[string]interface{}
 
+	//TODO: CheckDecodeResponse
 	err = json.NewDecoder(r.Body).Decode(&data)
 	if err != nil {
 		fmt.Print(err.Error())
@@ -293,12 +290,14 @@ func (api *API) POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		api.metrics.FollowRequests.WithLabelValues("follow").Inc()
-		err = json.NewEncoder(w).Encode(data)
-		if err != nil {
-			fmt.Print(err.Error())
-			return
-		}
+		CheckEncodeResponse(w, data, http.StatusCreated)
+		// err = json.NewEncoder(w).Encode(data)
+		// if err != nil {
+		// 	fmt.Print(err.Error())
+		//	return
+		// }
 		return
+
 	} else if unfollowsUsername, exists := data["unfollow"]; exists {
 		unfollowsUserID, _ := api.getUserID(db, unfollowsUsername.(string))
 		if unfollowsUserID == 0 {
@@ -321,11 +320,12 @@ func (api *API) POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 		}).Info("User followed successfully")
 
 		api.metrics.UnfollowRequests.WithLabelValues("unfollow").Inc()
-		err = json.NewEncoder(w).Encode(data)
-		if err != nil {
-			fmt.Print(err.Error())
-			return
-		}
+		CheckEncodeResponse(w, data, http.StatusCreated)
+		// err = json.NewEncoder(w).Encode(data)
+		// if err != nil {
+		// 	fmt.Print(err.Error())
+		// 	return
+		// }
 		return
 	}
 
@@ -346,6 +346,7 @@ func (api *API) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	var error = ""
 
 	var data map[string]interface{}
+	//TODO: CheckDecodeResponse
 	err = json.NewDecoder(r.Body).Decode(&data)
 	if err != nil {
 		fmt.Print(err.Error())
@@ -388,7 +389,7 @@ func (api *API) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	if error == "" {
 		logger.WithField("username", username).Info("User registered successfully")
 		api.metrics.SuccessfulRequests.WithLabelValues("register").Inc()
-		w.WriteHeader(http.StatusNoContent)
+		w.WriteHeader(http.StatusNoContent) //shouldnt this be StatusCreated?? 201
 		status = 200
 	} else {
 		logger.Warn(error)
@@ -400,18 +401,20 @@ func (api *API) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		"status":    status,
 		"error_msg": error,
 	}
-	
-	err = json.NewEncoder(w).Encode(response)
-	if err != nil {
-		fmt.Print(err.Error())
-		return
-	}
+
+	//this returns status ok only to show that the encoding worked, the status for registering user is stored in response map.
+	CheckEncodeResponse(w, response, http.StatusOK)
+	// err = json.NewEncoder(w).Encode(response)
+	// if err != nil {
+	// 	fmt.Print(err.Error())
+	// 	return
+	// }
 }
 
 func (api *API) GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	defer afterRequestLogging(start, r)
-		
+
 	UpdateLatest(r)
 
 	logger.WithFields(logrus.Fields{
@@ -461,16 +464,17 @@ func (api *API) GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 		filteredMsgs = append(filteredMsgs, filteredMsg)
 	}
 
-	err = json.NewEncoder(w).Encode(filteredMsgs)
-	if err != nil {
-		fmt.Print(err.Error())
-	}
+	CheckEncodeResponse(w, filteredMsgs, http.StatusOK)
+	// err = json.NewEncoder(w).Encode(filteredMsgs)
+	// if err != nil {
+	// 	fmt.Print(err.Error())
+	// }
 }
 
 func (api *API) GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	defer afterRequestLogging(start, r)
-	
+
 	UpdateLatest(r)
 
 	username := mux.Vars(r)["username"]
@@ -533,11 +537,12 @@ func (api *API) GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	
-	err = json.NewEncoder(w).Encode(filteredMsgs)
-	if err != nil {
-		fmt.Print(err.Error())
-	}
+
+	CheckEncodeResponse(w, filteredMsgs, http.StatusOK)
+	// err = json.NewEncoder(w).Encode(filteredMsgs)
+	// if err != nil {
+	// 	fmt.Print(err.Error())
+	// }
 }
 
 func (api *API) POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
@@ -587,13 +592,17 @@ func (api *API) POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	if err := db.Create(&message).Error; err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		logger.WithError(err).Error("Failed to insert message into database")
-		err = json.NewEncoder(w).Encode(map[string]interface{}{
-			"status": http.StatusBadRequest,
-			"res":    err.Error(),
-		})
-		if err != nil {
-			fmt.Print(err.Error())
-		}
+
+		CheckEncodeResponse(w, map[string]interface{}{
+			"res": "",
+		}, http.StatusBadRequest) //update: No need for "status" in the map!
+		// err = json.NewEncoder(w).Encode(map[string]interface{}{
+		// 	"status": http.StatusBadRequest,
+		// 	"res":    err.Error(),
+		// })
+		// if err != nil {
+		// 	fmt.Print(err.Error())
+		// }
 		return
 	}
 
@@ -603,19 +612,22 @@ func (api *API) POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	// Successful response
 	w.WriteHeader(http.StatusNoContent)
 	api.metrics.SuccessfulRequests.WithLabelValues("tweet").Inc()
-	err = json.NewEncoder(w).Encode(map[string]interface{}{
-		"status": http.StatusNoContent,
-		"res":    "",
-	})
-	if err != nil {
-		fmt.Print(err.Error())
-	}
+	CheckEncodeResponse(w, map[string]interface{}{
+		"res": "",
+	}, http.StatusNoContent)
+	// err = json.NewEncoder(w).Encode(map[string]interface{}{
+	// 	"status": http.StatusNoContent,
+	// 	"res":    "",
+	// })
+	// if err != nil {
+	// 	fmt.Print(err.Error())
+	// }
 }
 
 func (api *API) GETUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	defer afterRequestLogging(start, r)
-	
+
 	userID := r.URL.Query().Get("user_id")
 	username := r.URL.Query().Get("username")
 
@@ -664,10 +676,11 @@ func (api *API) GETUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
 
 	logger.WithFields(logrus.Fields{"userID": user.UserID, "username": user.Username}).Info("User details retrieved successfully")
 	api.metrics.SuccessfulRequests.WithLabelValues("get_user_details").Inc()
-	err = json.NewEncoder(w).Encode(userDetails)
-	if err != nil {
-		fmt.Print(err.Error())
-	}
+	CheckEncodeResponse(w, userDetails, http.StatusOK)
+	// err = json.NewEncoder(w).Encode(userDetails)
+	// if err != nil {
+	// 	fmt.Print(err.Error())
+	// }
 }
 
 func (api *API) GETFollowingHandler(w http.ResponseWriter, r *http.Request) {
@@ -699,10 +712,11 @@ func (api *API) GETFollowingHandler(w http.ResponseWriter, r *http.Request) {
 
 	logger.WithField("is_following", isFollowing).Info("Following status retrieved successfully")
 	api.metrics.SuccessfulRequests.WithLabelValues("get_following").Inc()
-	err = json.NewEncoder(w).Encode(isFollowing)
-	if err != nil {
-		fmt.Print(err.Error())
-	}
+	CheckEncodeResponse(w, isFollowing, http.StatusOK)
+	// err = json.NewEncoder(w).Encode(isFollowing)
+	// if err != nil {
+	// 	fmt.Print(err.Error())
+	// }
 }
 
 func (api *API) PostLoginHandler(w http.ResponseWriter, r *http.Request) {
@@ -757,7 +771,7 @@ func (api *API) PostLoginHandler(w http.ResponseWriter, r *http.Request) {
 func (api *API) GetFollowingMessages(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	defer afterRequestLogging(start, r)
-	
+
 	var userID = r.URL.Query().Get("userid")
 
 	logger.WithFields(logrus.Fields{
@@ -801,10 +815,11 @@ func (api *API) GetFollowingMessages(w http.ResponseWriter, r *http.Request) {
 	logger.WithField("message_count", len(messages)).Info("Following messages retrieved successfully")
 
 	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(filteredMsgs)
-	if err != nil {
-		fmt.Print(err.Error())
-	}
+	CheckEncodeResponse(w, filteredMsgs, http.StatusOK)
+	// err = json.NewEncoder(w).Encode(filteredMsgs)
+	// if err != nil {
+	// 	fmt.Print(err.Error())
+	// }
 }
 
 func getPort() {
@@ -814,12 +829,27 @@ func getPort() {
 	}
 }
 
-func CheckResponse(w http.ResponseWriter, response map[string][]string) {
-	err = json.NewEncoder(w).Encode(response)
+// func CheckResponse(w http.ResponseWriter, response map[string][]string) {
+// 	err = json.NewEncoder(w).Encode(response)
+// 	if err != nil {
+// 		fmt.Print(err.Error())
+// 	}
+// }
+
+// gemini suggested: takes any type of response, and also the status code we expect in case of successful request
+func CheckEncodeResponse(w http.ResponseWriter, response interface{}, statusCode int) {
+	w.WriteHeader(statusCode)
+	err := json.NewEncoder(w).Encode(response)
 	if err != nil {
-		fmt.Print(err.Error())
+		log.Printf("Error encoding response: %v", err)
+		// If encoding fails, override the status code to 500.
+		if statusCode != http.StatusInternalServerError {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 	}
 }
+
+//TODO: CheckDecodeResponse()
 
 func main() {
 	initLogger()

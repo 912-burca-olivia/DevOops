@@ -8,6 +8,7 @@ type Metrics struct {
 	UnfollowRequests   *prometheus.CounterVec
 	FollowRequests     *prometheus.CounterVec
 	BadRequests        *prometheus.CounterVec
+	UserNotFound       *prometheus.CounterVec
 }
 
 func InitMetrics() *Metrics {
