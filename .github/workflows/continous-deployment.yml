@@ -92,8 +92,11 @@ jobs:
             source ~/.bash_profile && \
             cd /home/vagrant/DevOops && \
             docker compose -f docker-compose.yml pull && \
+            docker compose -f docker-compose.yml up --build setup && \
             docker compose -f docker-compose.yml up -d
           "
         env:
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
+# To be added to copy files to remote server
+# scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -r ./ root@67.207.75.4:/home/vagrant/DevOops
