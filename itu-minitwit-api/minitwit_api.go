@@ -176,10 +176,10 @@ func GetNumberHandler(r *http.Request) int {
 }
 
 func (api *API) GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
-	
+
 	//number of requested followers
 	rowNums := GetNumberHandler(r)
-	
+
 	start := time.Now()
 	defer afterRequestLogging(start, r)
 
@@ -196,10 +196,11 @@ func (api *API) GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
 	userID, _ := api.getUserID(db, vars["username"])
 
 	if userID == 0 {
+		createDummyUser(*api, vars["username"])
 		logger.WithField("username", vars["username"]).Warn(USER_NOT_FOUND)
-		api.metrics.BadRequests.WithLabelValues("get_follower").Inc()
-		http.Error(w, "Cannot find user", http.StatusNotFound)
-		return
+		// api.metrics.BadRequests.WithLabelValues("get_follower").Inc()
+		// http.Error(w, "Cannot find user", http.StatusNotFound)
+		//return
 	}
 
 	// Query all followers
@@ -220,18 +221,17 @@ func (api *API) GETFollowerHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Query execution failed", http.StatusInternalServerError)
 		return
 	}
-	
+
 	logger.WithField("follower_count", len(followers)).Info("Followers retrieved successfully")
 	response := map[string][]string{"follows": followers}
 	json.NewEncoder(w).Encode(response)
-	
-	
+
 }
 
 func (api *API) POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	defer afterRequestLogging(start, r)
-	
+
 	UpdateLatest(r)
 
 	vars := mux.Vars(r)
@@ -240,9 +240,10 @@ func (api *API) POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 
 	if userID == 0 {
 		logger.Warn(USER_NOT_FOUND, logrus.Fields{"username": vars["username"]})
-		api.metrics.BadRequests.WithLabelValues("post_follower").Inc()
-		http.Error(w, "Cannot find user", http.StatusNotFound)
-		return
+		//api.metrics.BadRequests.WithLabelValues("post_follower").Inc()
+		//http.Error(w, "Cannot find user", http.StatusNotFound)
+		userID, _ = createDummyUser(*api, vars["username"])
+		//api.getUserID(db, vars["username"])
 	}
 
 	var data map[string]interface{}
@@ -253,9 +254,11 @@ func (api *API) POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 		followsUserID, _ := api.getUserID(db, followsUsername.(string))
 		if followsUserID == 0 {
 			logger.Warn("Follow target user not found", logrus.Fields{"target_user": followsUsername})
-			api.metrics.BadRequests.WithLabelValues("post_follower").Inc()
-			http.Error(w, "The user you are trying to follow cannot be found", http.StatusNotFound)
-			return
+			//api.metrics.BadRequests.WithLabelValues("post_follower").Inc()
+			//http.Error(w, "The user you are trying to follow cannot be found", http.StatusNotFound)
+			followsUserID, _ = createDummyUser(*api, followsUsername.(string))
+			//followsUserID, _ = api.getUserID(db, followsUsername.(string))
+			//return
 		}
 
 		// Insert follow relationship
@@ -275,9 +278,10 @@ func (api *API) POSTFollowerHandler(w http.ResponseWriter, r *http.Request) {
 	} else if unfollowsUsername, exists := data["unfollow"]; exists {
 		unfollowsUserID, _ := api.getUserID(db, unfollowsUsername.(string))
 		if unfollowsUserID == 0 {
-			api.metrics.BadRequests.WithLabelValues("post_follower").Inc()
-			http.Error(w, "The user you are trying to unfollow cannot be found", http.StatusNotFound)
-			return
+			unfollowsUserID, _ = createDummyUser(*api, unfollowsUsername.(string))
+			//api.metrics.BadRequests.WithLabelValues("post_follower").Inc()
+			//http.Error(w, "The user you are trying to unfollow cannot be found", http.StatusNotFound)
+			//return
 		}
 		// Delete follow relationship
 		err := db.Where("who_id = ? AND whom_id = ?", userID, unfollowsUserID).Delete(&Follower{}).Error
@@ -372,7 +376,7 @@ func (api *API) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 func (api *API) GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	defer afterRequestLogging(start, r)
-	
+
 	UpdateLatest(r)
 
 	logger.WithFields(logrus.Fields{
@@ -425,7 +429,7 @@ func (api *API) GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
 func (api *API) GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	defer afterRequestLogging(start, r)
-	
+
 	UpdateLatest(r)
 
 	username := mux.Vars(r)["username"]
@@ -440,11 +444,12 @@ func (api *API) GETUserMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	// Get user ID
 	userID, err := api.getUserID(db, username)
 	if err != nil || userID == 0 {
-		logger.WithField("username", username).Warn(USER_NOT_FOUND)
-		fmt.Printf("Cannot find user: %s", username)
-		http.Error(w, "Cannot find user", http.StatusNotFound)
-		api.metrics.BadRequests.WithLabelValues("get_user_messages").Inc()
-		return
+		userID, _ = createDummyUser(*api, username)
+		// logger.WithField("username", username).Warn(USER_NOT_FOUND)
+		// fmt.Printf("Cannot find user: %s", username)
+		// http.Error(w, "Cannot find user", http.StatusNotFound)
+		// api.metrics.BadRequests.WithLabelValues("get_user_messages").Inc()
+		// return
 	}
 
 	// Retrieve messages
@@ -507,10 +512,11 @@ func (api *API) POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	// Get user ID
 	userID, err := api.getUserID(db, username)
 	if err != nil || userID == 0 {
-		logger.WithField("username", username).Warn(USER_NOT_FOUND)
-		fmt.Printf("Cannot find user: %s", username)
-		http.Error(w, "Cannot find user", http.StatusNotFound)
-		return
+		userID, _ = createDummyUser(*api, username)
+		// logger.WithField("username", username).Warn(USER_NOT_FOUND)
+		// fmt.Printf("Cannot find user: %s", username)
+		// http.Error(w, "Cannot find user", http.StatusNotFound)
+		// return
 	}
 
 	// Read and decode request body
@@ -559,7 +565,7 @@ func (api *API) POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 func (api *API) GETUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	defer afterRequestLogging(start, r)
-	
+
 	userID := r.URL.Query().Get("user_id")
 	username := r.URL.Query().Get("username")
 
@@ -645,7 +651,6 @@ func (api *API) GETFollowingHandler(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(isFollowing)
 
-
 }
 
 func (api *API) PostLoginHandler(w http.ResponseWriter, r *http.Request) {
@@ -700,7 +705,7 @@ func (api *API) PostLoginHandler(w http.ResponseWriter, r *http.Request) {
 func (api *API) GetFollowingMessages(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	defer afterRequestLogging(start, r)
-	
+
 	var userID = r.URL.Query().Get("userid")
 
 	logger.WithFields(logrus.Fields{
