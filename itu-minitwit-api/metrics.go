@@ -2,15 +2,13 @@ package main
 
 import "github.com/prometheus/client_golang/prometheus"
 
-
-
 type Metrics struct {
 	SuccessfulRequests *prometheus.CounterVec
-	MessagesSent *prometheus.CounterVec
-	UnfollowRequests *prometheus.CounterVec
-	FollowRequests *prometheus.CounterVec
-	BadRequests *prometheus.CounterVec
-	UserNotFound *prometheus.CounterVec
+	MessagesSent       *prometheus.CounterVec
+	UnfollowRequests   *prometheus.CounterVec
+	FollowRequests     *prometheus.CounterVec
+	BadRequests        *prometheus.CounterVec
+	UserNotFound       *prometheus.CounterVec
 }
 
 func InitMetrics() *Metrics {
