@@ -139,6 +139,9 @@ jobs:
         env:
           DO_API_TOKEN: ${{ secrets.DO_API_TOKEN }}
 
+      - name: Wait for reassignment
+        run: sleep 10
+
       - name: Assign passive IP to previously active droplet
         run: |
           curl -X POST "https://api.digitalocean.com/v2/floating_ips/${{ secrets.SSH_HOST_PASSIVE }}/actions" \
