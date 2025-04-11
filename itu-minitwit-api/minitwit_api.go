@@ -372,12 +372,12 @@ func (api *API) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		logger.WithField("username", username).Info("User registered successfully")
 		api.metrics.SuccessfulRequests.WithLabelValues("register").Inc()
 		w.WriteHeader(http.StatusNoContent)
-		status = 200
+		status = http.StatusNoContent
 	} else {
 		logger.Warn(error)
 		api.metrics.BadRequests.WithLabelValues("register").Inc()
 		w.WriteHeader(http.StatusBadRequest)
-		status = 400
+		status = http.StatusBadRequest
 	}
 	response := map[string]interface{}{
 		"status":    status,
@@ -385,7 +385,7 @@ func (api *API) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//this returns status ok only to show that the encoding worked, the status for registering user is stored in response map.
-	CheckEncodeResponse(w, response, http.StatusOK)
+	CheckEncodeResponse(w, response, status)
 }
 
 func (api *API) GETAllMessagesHandler(w http.ResponseWriter, r *http.Request) {
@@ -573,7 +573,6 @@ func (api *API) POSTMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	api.metrics.MessagesSent.WithLabelValues("tweet").Inc()
 
 	// Successful response
-	w.WriteHeader(http.StatusNoContent)
 	api.metrics.SuccessfulRequests.WithLabelValues("tweet").Inc()
 	CheckEncodeResponse(w, map[string]interface{}{
 		"status": http.StatusNoContent, //not sure we need status in map!
