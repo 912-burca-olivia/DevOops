@@ -141,9 +141,11 @@ jobs:
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_HOST_PASSIVE: ${{ secrets.SSH_HOST_PASSIVE }}
 
+
 # To be added to copy files to remote server
 # scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -r ./ root@67.207.75.4:/home/vagrant/DevOops
 
 # add this line for activating logging:
 # docker compose -f docker-compose.yml up --build setup && \
 # after 'docker compose -f docker-compose.yml pull && \'
+
