@@ -4,4 +4,5 @@ global:
 scrape_configs:
   - job_name: "itu-minittwit-api"
     static_configs:
-      - targets: ["host.docker.internal:7070"]  # Adjust if running in Docker
+      - targets: ["142.93.109.120:7070"]  # Adjust if running in Docker
+
