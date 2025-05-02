@@ -78,31 +78,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Add both Floating IPs to known_hosts (with retries)
+      - name: Add both Floating IPs to known_hosts
         run: |
+          echo "SSH_HOST_ACTIVE is: $SSH_HOST_ACTIVE"
+          echo "SSH_HOST_PASSIVE is: $SSH_HOST_PASSIVE"
           mkdir -p ~/.ssh
-
-          echo "Scanning SSH_HOST_ACTIVE: $SSH_HOST_ACTIVE"
-          for i in {1..5}; do
-            ssh-keyscan -T 5 -H "$SSH_HOST_ACTIVE" >> ~/.ssh/known_hosts 2>/dev/null && break
-            echo "Retrying SSH_HOST_ACTIVE ($i)..."
-            sleep 2
-            if [ "$i" -eq 5 ]; then
-              echo "ERROR: ssh-keyscan failed for SSH_HOST_ACTIVE ($SSH_HOST_ACTIVE)"
-              exit 1
-            fi
-          done
-
-          echo "Scanning SSH_HOST_PASSIVE: $SSH_HOST_PASSIVE"
-          for i in {1..5}; do
-            ssh-keyscan -T 5 -H "$SSH_HOST_PASSIVE" >> ~/.ssh/known_hosts 2>/dev/null && break
-            echo "Retrying SSH_HOST_PASSIVE ($i)..."
-            sleep 2
-            if [ "$i" -eq 5 ]; then
-              echo "ERROR: ssh-keyscan failed for SSH_HOST_PASSIVE ($SSH_HOST_PASSIVE)"
-              exit 1
-            fi
-          done
+          ssh-keyscan -H $SSH_HOST_ACTIVE >> ~/.ssh/known_hosts
+          ssh-keyscan -H $SSH_HOST_PASSIVE >> ~/.ssh/known_hosts
         env:
           SSH_HOST_ACTIVE: ${{ secrets.SSH_HOST_ACTIVE }}
           SSH_HOST_PASSIVE: ${{ secrets.SSH_HOST_PASSIVE }}
