@@ -27,7 +27,7 @@ resource "digitalocean_droplet" "devoops_green" {
   image    = "docker-20-04"
   name     = "devoops-green"
   region   = "fra1"
-  size     = "s-1vcpu-2gb"
+  size     = "s-4vcpu-8gb"
   ssh_keys = [var.ssh_fingerprint]
 
   connection {
@@ -48,7 +48,7 @@ resource "digitalocean_droplet" "devoops_blue" {
   image    = "docker-20-04"
   name     = "devoops-blue"
   region   = "fra1"
-  size     = "s-1vcpu-2gb"
+  size     = "s-4vcpu-8gb"
   ssh_keys = [var.ssh_fingerprint]
 
   connection {

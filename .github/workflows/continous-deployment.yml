@@ -125,22 +125,69 @@ jobs:
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_HOST_PASSIVE: ${{ secrets.SSH_HOST_PASSIVE }}
 
-      - name: Swap floating IPs
+      - name: Determine active/passive droplet IDs
+        id: determine_droplets
         run: |
-          echo "Swapping floating IPs..."
-          active_id=$(curl -s -H "Authorization: Bearer $DO_API_TOKEN" https://api.digitalocean.com/v2/floating_ips/$SSH_HOST_ACTIVE | jq -r '.floating_ip.droplet.id')
-          passive_id=$(curl -s -H "Authorization: Bearer $DO_API_TOKEN" https://api.digitalocean.com/v2/floating_ips/$SSH_HOST_PASSIVE | jq -r '.floating_ip.droplet.id')
+          active_id=$(curl -s -H "Authorization: Bearer $DO_API_TOKEN" \
+            https://api.digitalocean.com/v2/floating_ips/$SSH_HOST_ACTIVE | jq -r '.floating_ip.droplet.id')
 
-          curl -X POST "https://api.digitalocean.com/v2/floating_ips/$SSH_HOST_ACTIVE/actions" \
-            -H "Authorization: Bearer $DO_API_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "{\"type\":\"assign\", \"droplet_id\": $passive_id }"
+          passive_id=$(curl -s -H "Authorization: Bearer $DO_API_TOKEN" \
+            https://api.digitalocean.com/v2/floating_ips/$SSH_HOST_PASSIVE | jq -r '.floating_ip.droplet.id')
 
-          curl -X POST "https://api.digitalocean.com/v2/floating_ips/$SSH_HOST_PASSIVE/actions" \
-            -H "Authorization: Bearer $DO_API_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "{\"type\":\"assign\", \"droplet_id\": $active_id }"
+          echo "active_id=$active_id" >> $GITHUB_OUTPUT
+          echo "passive_id=$passive_id" >> $GITHUB_OUTPUT
         env:
           DO_API_TOKEN: ${{ secrets.DO_API_TOKEN }}
           SSH_HOST_ACTIVE: ${{ secrets.SSH_HOST_ACTIVE }}
           SSH_HOST_PASSIVE: ${{ secrets.SSH_HOST_PASSIVE }}
+
+      - name: Unassign passive floating IP
+        run: |
+          curl -X POST "https://api.digitalocean.com/v2/floating_ips/${{ secrets.SSH_HOST_PASSIVE }}/actions" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $DO_API_TOKEN" \
+            -d '{"type":"unassign"}'
+        env:
+          DO_API_TOKEN: ${{ secrets.DO_API_TOKEN }}
+
+      - name: Wait for unassignment
+        run: sleep 10
+
+      - name: Assign active IP to passive droplet
+        run: |
+          curl -X POST "https://api.digitalocean.com/v2/floating_ips/${{ secrets.SSH_HOST_ACTIVE }}/actions" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $DO_API_TOKEN" \
+            -d "{\"type\":\"assign\", \"droplet_id\": ${{ steps.determine_droplets.outputs.passive_id }} }"
+        env:
+          DO_API_TOKEN: ${{ secrets.DO_API_TOKEN }}
+
+      - name: Wait for reassignment
+        run: sleep 10
+
+      - name: Assign passive IP to previously active droplet
+        run: |
+          curl -X POST "https://api.digitalocean.com/v2/floating_ips/${{ secrets.SSH_HOST_PASSIVE }}/actions" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $DO_API_TOKEN" \
+            -d "{\"type\":\"assign\", \"droplet_id\": ${{ steps.determine_droplets.outputs.active_id }} }"
+        env:
+          DO_API_TOKEN: ${{ secrets.DO_API_TOKEN }}
+
+      - name: Deploy to passive server (given by floating IP)
+        run: |
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST_PASSIVE "
+            source ~/.bash_profile && \
+            cd /home/vagrant/DevOops && \
+            docker compose -f docker-compose.yml pull && \
+            docker compose -f docker-compose.yml up -d
+          "
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST_PASSIVE: ${{ secrets.SSH_HOST_PASSIVE }}
+# To be added to copy files to remote server
+# scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -r ./ root@67.207.75.4:/home/vagrant/DevOops
+
+# add this line for activating logging:
+# docker compose -f docker-compose.yml up --build setup && \
+# after 'docker compose -f docker-compose.yml pull && \'
