@@ -19,12 +19,15 @@ provider "digitalocean" {
   token = var.do_token
 }
 
-resource "digitalocean_droplet" "devoops" {
-  image  = "docker-20-04"
-  name   = "devoops-terraform"
-  region = "fra1"
-  size   = "s-1vcpu-2gb"
+variable "do_token" {}
+variable "ssh_fingerprint" {}
+variable "private_key_path" {}
 
+resource "digitalocean_droplet" "devoops_green" {
+  image    = "docker-20-04"
+  name     = "devoops-green"
+  region   = "fra1"
+  size     = "s-1vcpu-2gb"
   ssh_keys = [var.ssh_fingerprint]
 
   connection {
@@ -36,16 +39,54 @@ resource "digitalocean_droplet" "devoops" {
 
   provisioner "remote-exec" {
     inline = [
-      "echo 'Connection successful!' > /root/terraform-test.txt"
-      # here we can add the configuration for the files needed on the droplet
-      # still have to figure out how to include green/blue passive/active in this
+      "echo 'Green droplet provisioned.' > /root/terraform-test.txt"
     ]
   }
 }
 
-variable "do_token" {}
-variable "ssh_fingerprint" {}
-variable "private_key_path" {}
-# variable "docker_compose_file" {
-#   default = file("docker-compose.yml")
-# }
+resource "digitalocean_droplet" "devoops_blue" {
+  image    = "docker-20-04"
+  name     = "devoops-blue"
+  region   = "fra1"
+  size     = "s-1vcpu-2gb"
+  ssh_keys = [var.ssh_fingerprint]
+
+  connection {
+    type        = "ssh"
+    user        = "root"
+    private_key = file(var.private_key_path)
+    host        = self.ipv4_address
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "echo 'Blue droplet provisioned.' > /root/terraform-test.txt"
+    ]
+  }
+}
+
+resource "digitalocean_floating_ip" "active_ip" {
+  region = "fra1"
+}
+
+resource "digitalocean_floating_ip_assignment" "active_ip_assign" {
+  ip_address = digitalocean_floating_ip.active_ip.ip_address
+  droplet_id = digitalocean_droplet.devoops_green.id
+}
+
+resource "digitalocean_floating_ip" "passive_ip" {
+  region = "fra1"
+}
+
+resource "digitalocean_floating_ip_assignment" "passive_ip_assign" {
+  ip_address = digitalocean_floating_ip.passive_ip.ip_address
+  droplet_id = digitalocean_droplet.devoops_blue.id
+}
+
+output "active_floating_ip" {
+  value = digitalocean_floating_ip.active_ip.ip_address
+}
+
+output "passive_floating_ip" {
+  value = digitalocean_floating_ip.passive_ip.ip_address
+}
