@@ -78,13 +78,31 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Add both Floating IPs to known_hosts
+      - name: Add both Floating IPs to known_hosts (with retries)
         run: |
-          echo "SSH_HOST_ACTIVE is: $SSH_HOST_ACTIVE"
-          echo "SSH_HOST_PASSIVE is: $SSH_HOST_PASSIVE"
           mkdir -p ~/.ssh
-          ssh-keyscan -H $SSH_HOST_ACTIVE >> ~/.ssh/known_hosts
-          ssh-keyscan -H $SSH_HOST_PASSIVE >> ~/.ssh/known_hosts
+
+          echo "Scanning SSH_HOST_ACTIVE: $SSH_HOST_ACTIVE"
+          for i in {1..5}; do
+            ssh-keyscan -T 5 -H "$SSH_HOST_ACTIVE" >> ~/.ssh/known_hosts 2>/dev/null && break
+            echo "Retrying SSH_HOST_ACTIVE ($i)..."
+            sleep 2
+            if [ "$i" -eq 5 ]; then
+              echo "ERROR: ssh-keyscan failed for SSH_HOST_ACTIVE ($SSH_HOST_ACTIVE)"
+              exit 1
+            fi
+          done
+
+          echo "Scanning SSH_HOST_PASSIVE: $SSH_HOST_PASSIVE"
+          for i in {1..5}; do
+            ssh-keyscan -T 5 -H "$SSH_HOST_PASSIVE" >> ~/.ssh/known_hosts 2>/dev/null && break
+            echo "Retrying SSH_HOST_PASSIVE ($i)..."
+            sleep 2
+            if [ "$i" -eq 5 ]; then
+              echo "ERROR: ssh-keyscan failed for SSH_HOST_PASSIVE ($SSH_HOST_PASSIVE)"
+              exit 1
+            fi
+          done
         env:
           SSH_HOST_ACTIVE: ${{ secrets.SSH_HOST_ACTIVE }}
           SSH_HOST_PASSIVE: ${{ secrets.SSH_HOST_PASSIVE }}
@@ -128,7 +146,8 @@ jobs:
       - name: Determine active/passive droplet IDs
         id: determine_droplets
         run: |
-          active_id=$(curl -s -H "Authorization: Bearer $DO_API_TOKEN" \https://api.digitalocean.com/v2/floating_ips/$SSH_HOST_ACTIVE | jq -r '.floating_ip.droplet.id')
+          active_id=$(curl -s -H "Authorization: Bearer $DO_API_TOKEN" \
+            https://api.digitalocean.com/v2/floating_ips/$SSH_HOST_ACTIVE | jq -r '.floating_ip.droplet.id')
 
           passive_id=$(curl -s -H "Authorization: Bearer $DO_API_TOKEN" \
             https://api.digitalocean.com/v2/floating_ips/$SSH_HOST_PASSIVE | jq -r '.floating_ip.droplet.id')
@@ -190,4 +209,3 @@ jobs:
 # add this line for activating logging:
 # docker compose -f docker-compose.yml up --build setup && \
 # after 'docker compose -f docker-compose.yml pull && \'
-
