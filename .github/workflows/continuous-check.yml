@@ -6,10 +6,11 @@
 name: Continuous Check
 
 on:
-  pull_request:
-  
+  #pull_request:
+  push:
+    branches:
+      - fix-continuous-check
   workflow_dispatch:
-    manual: true
 
 jobs:
   gofmt:
@@ -22,11 +23,11 @@ jobs:
     
       - name: Check for gofmt changes
         run: git diff --exit-code #returns 0 if gofmt did not make a change
-        continue-on-error: true #allows next step even if 1 or error is returned
+        continue-on-error: true #allows next step even error is returned
 
       - name: Fail on gofmt changes 
         if: ${{ failure() }}
-        run: |     #i cannot see where this echos to?
+        run: |    
           echo "gofmt found changes. Please format your code."
           exit 1 
         #if this step fails, run $gofmt -s -w . from DevOops folder, commit and try again.
@@ -37,14 +38,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
+          cache: false
           go-version: stable
           
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
           version: v2.0
-
-      #TODO: there is a caching warning when you run this which I have not managed to resolve.
   
   dockerfilelint:
     runs-on: ubuntu-latest
