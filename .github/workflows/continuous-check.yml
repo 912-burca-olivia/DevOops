@@ -6,10 +6,8 @@
 name: Continuous Check
 
 on:
-  #pull_request:
-  push:
-    branches:
-      - fix-continuous-check
+  pull_request:
+    
   workflow_dispatch:
 
 jobs:
