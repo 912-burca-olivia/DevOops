@@ -10,33 +10,72 @@ terraform {
       source  = "digitalocean/digitalocean"
       version = "~> 2.0"
     }
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
   }
 }
 
+# -------------------------------
+# Providers
+# -------------------------------
 provider "digitalocean" {
   token = var.do_token
 }
 
+provider "aws" {
+  alias                       = "spaces"
+  region                      = var.spaces_region
+  access_key                  = var.spaces_access_key
+  secret_key                  = var.spaces_secret_key
+  skip_metadata_api_check     = true
+  skip_credentials_validation = true
+  endpoints {
+    s3 = var.spaces_endpoint
+  }
+}
 # -------------------------------
 # Variables
 # -------------------------------
 variable "do_token" {
   description = "DigitalOcean API token"
+  type        = string
 }
 
+variable "ssh_pub_key" {
+  description = "Public SSH key for GitHub Actions"
+  type        = string
+}
+
+variable "spaces_access_key" {
+  description = "Access key for DigitalOcean Spaces"
+  type        = string
+}
+
+variable "spaces_secret_key" {
+  description = "Secret key for DigitalOcean Spaces"
+  type        = string
+}
+
+variable "spaces_region" {
+  description = "Region of the DigitalOcean Space (e.g. fra1)"
+  type        = string
+}
+
+variable "spaces_endpoint" {
+  description = "Endpoint URL for the DigitalOcean Space"
+  type        = string
+}
 
 # -------------------------------
 # SSH Key Resource
 # -------------------------------
-
-variable "ssh_pub_key" {
-  description = "Public SSH key for GitHub Actions"
-}
-
 resource "digitalocean_ssh_key" "github_actions_key" {
   name       = "github-actions-key"
   public_key = var.ssh_pub_key
 }
+
 # -------------------------------
 # Droplets
 # -------------------------------
@@ -78,6 +117,15 @@ resource "digitalocean_floating_ip_assignment" "passive_ip_assign" {
 }
 
 # -------------------------------
+# Spaces Bucket (Optional Example)
+# -------------------------------
+resource "aws_s3_bucket" "artifact_bucket" {
+  provider = aws.spaces
+  bucket   = "devoops-artifacts"
+  acl      = "private"
+}
+
+# -------------------------------
 # Outputs
 # -------------------------------
 output "active_floating_ip" {
@@ -86,4 +134,8 @@ output "active_floating_ip" {
 
 output "passive_floating_ip" {
   value = digitalocean_floating_ip.passive_ip.ip_address
+}
+
+output "spaces_bucket_name" {
+  value = aws_s3_bucket.artifact_bucket.id
 }
