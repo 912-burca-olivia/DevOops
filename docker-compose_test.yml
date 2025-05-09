@@ -1,34 +1,32 @@
-version: "3.8"
-
 services:
   api_test:
     image: ${DOCKER_USERNAME}/devoops-api-test:latest
     container_name: minitwit_api_test
-    ports:
-      - "9090:9090"
     volumes:
       - test_minitwit.db:/app
     environment:
       DATABASE: "/app/test_minitwit.db"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9090/msgs"]
+      test: [ "CMD", "curl", "-f", "http://localhost:9090/msgs" ]
       interval: 10s
       retries: 5
       start_period: 10s
       timeout: 5s
+    expose:
+      - '9090'
 
   app_test:
     image: ${DOCKER_USERNAME}/devoops-app-test:latest
     container_name: minitwit_app_test
-    ports:
-      - "8080:8080"
-    environment:
-      ENDPOINT: "http://172.17.0.1:9090"
     depends_on:
       api_test:
         condition: service_healthy
+    environment:
+      ENDPOINT: "http://172.17.0.1:9090"
+    ports:
+      - '8080:8080'
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8080" ]
       interval: 10s
       retries: 5
       start_period: 10s
@@ -37,9 +35,6 @@ services:
   test_runner:
     image: ${DOCKER_USERNAME}/devoops-test:latest
     container_name: minitwit_tests
-
-    environment:
-      ENDPOINT: "http://172.17.0.1:9090"
     depends_on:
       api_test:
         condition: service_healthy
@@ -47,7 +42,10 @@ services:
         condition: service_healthy
     volumes:
       - test_minitwit.db:/app
-    command: ["/bin/sh", "-c", "pytest --tb=short --maxfail=15"]
+
+    environment:
+      ENDPOINT: "http://172.17.0.1:9090"
+    command: [ "/bin/sh", "-c", "pytest --tb=short --maxfail=15" ]
 
 volumes:
   test_minitwit.db:

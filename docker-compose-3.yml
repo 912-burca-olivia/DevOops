@@ -1,56 +1,53 @@
-version: "3.8"
-
 services:
-  app:
-    image: ${DOCKER_USERNAME}/devoops-app:latest
-    container_name: minitwit_app
-    ports:
-      - "8080:8080"
-    environment:
-      ENDPOINT: "http://172.17.0.1:7070"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080"]
-      interval: 10s
-      retries: 5
-      start_period: 10s
-      timeout: 5s
-
   api:
     image: ${DOCKER_USERNAME}/devoops-api:latest
     container_name: minitwit_api
-    ports:
-      - "7070:7070"
     env_file:
       - .env
+    expose:
+      - '7070'
+
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7070"]
+      test: [ "CMD", "curl", "-f", "http://localhost:7070" ]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+      timeout: 5s
+  app:
+    image: ${DOCKER_USERNAME}/devoops-app:latest
+    container_name: minitwit_app
+    environment:
+      ENDPOINT: "http://172.17.0.1:7070"
+    ports:
+      - '8080:8080'
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080" ]
       interval: 10s
       retries: 5
       start_period: 10s
       timeout: 5s
 
-    restart: unless-stopped
+  grafana:
+    image: grafana/grafana
+    volumes:
+      - grafana_storage:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    expose:
+      - '3000'
 
   prometheus:
     image: prom/prometheus
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    expose:
+      - '9090' # Host port 9091, container port 9090
     command: --config.file=/etc/prometheus/prometheus.yml
-    ports:
-      - "9090:9090"  # Host port 9091, container port 9090
-
-  grafana:
-    image: grafana/grafana
-    ports:
-      - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-    volumes:
-      - 'grafana_storage:/var/lib/grafana'
 
 networks:
   main:
 
+
 volumes:
   grafana_storage: {}
-
