@@ -82,6 +82,7 @@ jobs:
         uses: hashicorp/setup-terraform@v2
 
       - name: Terraform Apply (Infra + Spaces)
+        working-directory: do-terraform
         run: |
           terraform init
           terraform apply -auto-approve \
