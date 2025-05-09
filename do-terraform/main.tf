@@ -1,10 +1,8 @@
-
 # build and destroy this with 
 # terraform init
 # terraform validate
 # terraform apply -auto-approve
 # terraform destroy
-
 
 terraform {
   required_providers {
@@ -19,29 +17,35 @@ provider "digitalocean" {
   token = var.do_token
 }
 
-variable "do_token" {}
-variable "ssh_fingerprint" {}
-variable "private_key_path" {}
+# -------------------------------
+# Variables
+# -------------------------------
+variable "do_token" {
+  description = "DigitalOcean API token"
+}
 
+
+# -------------------------------
+# SSH Key Resource
+# -------------------------------
+
+variable "ssh_pub_key" {
+  description = "Public SSH key for GitHub Actions"
+}
+
+resource "digitalocean_ssh_key" "github_actions_key" {
+  name       = "github-actions-key"
+  public_key = var.ssh_pub_key
+}
+# -------------------------------
+# Droplets
+# -------------------------------
 resource "digitalocean_droplet" "devoops_green" {
   image    = "docker-20-04"
   name     = "devoops-green"
   region   = "fra1"
   size     = "s-4vcpu-8gb"
-  ssh_keys = [var.ssh_fingerprint]
-
-  connection {
-    type        = "ssh"
-    user        = "root"
-    private_key = file(var.private_key_path)
-    host        = self.ipv4_address
-  }
-
-  provisioner "remote-exec" {
-    inline = [
-      "echo 'Green droplet provisioned.' > /root/terraform-test.txt"
-    ]
-  }
+  ssh_keys = [digitalocean_ssh_key.github_actions_key.id]
 }
 
 resource "digitalocean_droplet" "devoops_blue" {
@@ -49,22 +53,12 @@ resource "digitalocean_droplet" "devoops_blue" {
   name     = "devoops-blue"
   region   = "fra1"
   size     = "s-4vcpu-8gb"
-  ssh_keys = [var.ssh_fingerprint]
-
-  connection {
-    type        = "ssh"
-    user        = "root"
-    private_key = file(var.private_key_path)
-    host        = self.ipv4_address
-  }
-
-  provisioner "remote-exec" {
-    inline = [
-      "echo 'Blue droplet provisioned.' > /root/terraform-test.txt"
-    ]
-  }
+  ssh_keys = [digitalocean_ssh_key.github_actions_key.id]
 }
 
+# -------------------------------
+# Floating IPs
+# -------------------------------
 resource "digitalocean_floating_ip" "active_ip" {
   region = "fra1"
 }
@@ -83,6 +77,9 @@ resource "digitalocean_floating_ip_assignment" "passive_ip_assign" {
   droplet_id = digitalocean_droplet.devoops_blue.id
 }
 
+# -------------------------------
+# Outputs
+# -------------------------------
 output "active_floating_ip" {
   value = digitalocean_floating_ip.active_ip.ip_address
 }

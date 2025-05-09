@@ -78,6 +78,17 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Terraform Apply (Infra + Spaces)
+        run: |
+          terraform init
+          terraform apply -auto-approve \
+            -var "do_token=${{ secrets.DO_API_TOKEN }}" \
+            -var "ssh_pub_key=${{ secrets.NEW_SSH_PUB_KEY }}" \
+            -var "spaces_access_key=${{ secrets.SPACES_ACCESS_KEY }}" \
+            -var "spaces_secret_key=${{ secrets.SPACES_SECRET_KEY }}" \
+            -var "spaces_region=${{ secrets.SPACES_REGION }}" \
+            -var "spaces_endpoint=${{ secrets.SPACES_ENDPOINT }}"
+
       - name: Add both Floating IPs to known_hosts
         run: |
           echo "ACTIVE_IP is: $ACTIVE_IP"
@@ -91,10 +102,12 @@ jobs:
 
       - name: Configure SSH
         run: |
+          mkdir -p ~/.ssh
           echo "$SSH_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+          echo -e "Host *\n  StrictHostKeyChecking no\n  UserKnownHostsFile=/dev/null" > ~/.ssh/config
         env:
-          SSH_KEY: ${{ secrets.SSH_KEY }}
+          SSH_KEY: ${{ secrets.NEW_SSH_KEY }}
 
       - name: Copy all deployment files to passive server via scp
         run: |
