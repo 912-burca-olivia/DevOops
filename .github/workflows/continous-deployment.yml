@@ -66,8 +66,8 @@ jobs:
         if: always()
         run: docker compose -f docker-compose_test_local.yml down -v
 
-  ### SSH_HOST_ACTIVE is the FLOATING IP for the active droplet/server
-  ### SSH_HOST_PASSIVE is the FLOATING IP for the inactive droplet/server
+  ### ACTIVE_IP is the FLOATING IP for the active droplet/server
+  ### PASSIVE_IP is the FLOATING IP for the inactive droplet/server
   deploy:
     runs-on: ubuntu-latest
     needs: test
@@ -80,14 +80,14 @@ jobs:
 
       - name: Add both Floating IPs to known_hosts
         run: |
-          echo "SSH_HOST_ACTIVE is: $SSH_HOST_ACTIVE"
-          echo "SSH_HOST_PASSIVE is: $SSH_HOST_PASSIVE"
+          echo "ACTIVE_IP is: $ACTIVE_IP"
+          echo "PASSIVE_IP is: $PASSIVE_IP"
           mkdir -p ~/.ssh
-          ssh-keyscan -H $SSH_HOST_ACTIVE >> ~/.ssh/known_hosts
-          ssh-keyscan -H $SSH_HOST_PASSIVE >> ~/.ssh/known_hosts
+          ssh-keyscan -H $ACTIVE_IP >> ~/.ssh/known_hosts
+          ssh-keyscan -H $PASSIVE_IP >> ~/.ssh/known_hosts
         env:
-          SSH_HOST_ACTIVE: ${{ secrets.SSH_HOST_ACTIVE }}
-          SSH_HOST_PASSIVE: ${{ secrets.SSH_HOST_PASSIVE }}
+          ACTIVE_IP: ${{ secrets.ACTIVE_IP }}
+          PASSIVE_IP: ${{ secrets.PASSIVE_IP }}
 
       - name: Configure SSH
         run: |
@@ -108,14 +108,14 @@ jobs:
             setup \
             kibana \
             elasticsearch \
-            $SSH_USER@$SSH_HOST_PASSIVE:/home/vagrant/DevOops/
+            $SSH_USER@$PASSIVE_IP:/home/vagrant/DevOops/
         env:
           SSH_USER: ${{ secrets.SSH_USER }}
-          SSH_HOST_PASSIVE: ${{ secrets.SSH_HOST_PASSIVE }}
+          PASSIVE_IP: ${{ secrets.PASSIVE_IP }}
 
       - name: Deploy to passive server (given by floating IP)
         run: |
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST_PASSIVE "
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $SSH_USER@$PASSIVE_IP "
             source ~/.bash_profile && \
             cd /home/vagrant/DevOops && \
             docker compose -f docker-compose.yml pull && \
@@ -123,27 +123,27 @@ jobs:
           "
         env:
           SSH_USER: ${{ secrets.SSH_USER }}
-          SSH_HOST_PASSIVE: ${{ secrets.SSH_HOST_PASSIVE }}
+          PASSIVE_IP: ${{ secrets.PASSIVE_IP }}
 
       - name: Determine active/passive droplet IDs
         id: determine_droplets
         run: |
           active_id=$(curl -s -H "Authorization: Bearer $DO_API_TOKEN" \
-            https://api.digitalocean.com/v2/floating_ips/$SSH_HOST_ACTIVE | jq -r '.floating_ip.droplet.id')
+            https://api.digitalocean.com/v2/floating_ips/$ACTIVE_IP | jq -r '.floating_ip.droplet.id')
 
           passive_id=$(curl -s -H "Authorization: Bearer $DO_API_TOKEN" \
-            https://api.digitalocean.com/v2/floating_ips/$SSH_HOST_PASSIVE | jq -r '.floating_ip.droplet.id')
+            https://api.digitalocean.com/v2/floating_ips/$PASSIVE_IP | jq -r '.floating_ip.droplet.id')
 
           echo "active_id=$active_id" >> $GITHUB_OUTPUT
           echo "passive_id=$passive_id" >> $GITHUB_OUTPUT
         env:
           DO_API_TOKEN: ${{ secrets.DO_API_TOKEN }}
-          SSH_HOST_ACTIVE: ${{ secrets.SSH_HOST_ACTIVE }}
-          SSH_HOST_PASSIVE: ${{ secrets.SSH_HOST_PASSIVE }}
+          ACTIVE_IP: ${{ secrets.ACTIVE_IP }}
+          PASSIVE_IP: ${{ secrets.PASSIVE_IP }}
 
       - name: Unassign passive floating IP
         run: |
-          curl -X POST "https://api.digitalocean.com/v2/floating_ips/${{ secrets.SSH_HOST_PASSIVE }}/actions" \
+          curl -X POST "https://api.digitalocean.com/v2/floating_ips/${{ secrets.PASSIVE_IP }}/actions" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $DO_API_TOKEN" \
             -d '{"type":"unassign"}'
@@ -155,7 +155,7 @@ jobs:
 
       - name: Assign active IP to passive droplet
         run: |
-          curl -X POST "https://api.digitalocean.com/v2/floating_ips/${{ secrets.SSH_HOST_ACTIVE }}/actions" \
+          curl -X POST "https://api.digitalocean.com/v2/floating_ips/${{ secrets.ACTIVE_IP }}/actions" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $DO_API_TOKEN" \
             -d "{\"type\":\"assign\", \"droplet_id\": ${{ steps.determine_droplets.outputs.passive_id }} }"
@@ -167,7 +167,7 @@ jobs:
 
       - name: Assign passive IP to previously active droplet
         run: |
-          curl -X POST "https://api.digitalocean.com/v2/floating_ips/${{ secrets.SSH_HOST_PASSIVE }}/actions" \
+          curl -X POST "https://api.digitalocean.com/v2/floating_ips/${{ secrets.PASSIVE_IP }}/actions" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $DO_API_TOKEN" \
             -d "{\"type\":\"assign\", \"droplet_id\": ${{ steps.determine_droplets.outputs.active_id }} }"
@@ -176,7 +176,7 @@ jobs:
 
       - name: Deploy to passive server (given by floating IP)
         run: |
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST_PASSIVE "
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $SSH_USER@$PASSIVE_IP "
             source ~/.bash_profile && \
             cd /home/vagrant/DevOops && \
             docker compose -f docker-compose.yml pull && \
@@ -184,7 +184,7 @@ jobs:
           "
         env:
           SSH_USER: ${{ secrets.SSH_USER }}
-          SSH_HOST_PASSIVE: ${{ secrets.SSH_HOST_PASSIVE }}
+          PASSIVE_IP: ${{ secrets.PASSIVE_IP }}
 # To be added to copy files to remote server
 # scp -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -r ./ root@67.207.75.4:/home/vagrant/DevOops
 
