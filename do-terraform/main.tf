@@ -117,15 +117,6 @@ resource "digitalocean_floating_ip_assignment" "passive_ip_assign" {
 }
 
 # -------------------------------
-# Spaces Bucket (Optional Example)
-# -------------------------------
-resource "aws_s3_bucket" "artifact_bucket" {
-  provider = aws.spaces
-  bucket   = "devoops-artifacts"
-  acl      = "private"
-}
-
-# -------------------------------
 # Outputs
 # -------------------------------
 output "active_floating_ip" {

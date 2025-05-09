@@ -83,13 +83,14 @@ jobs:
 
       - name: Terraform Apply (Infra + Spaces)
         working-directory: do-terraform
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_KEY }}
         run: |
           terraform init
           terraform apply -auto-approve \
             -var "do_token=${{ secrets.DO_API_TOKEN }}" \
             -var "ssh_pub_key=${{ secrets.NEW_SSH_PUB_KEY }}" \
-            -var "spaces_access_key=${{ secrets.SPACES_ACCESS_KEY }}" \
-            -var "spaces_secret_key=${{ secrets.SPACES_SECRET_KEY }}" \
             -var "spaces_region=${{ secrets.SPACES_REGION }}" \
             -var "spaces_endpoint=${{ secrets.SPACES_ENDPOINT }}"
 
