@@ -1,0 +1,46 @@
+name: Build LaTeX PDF
+
+on:
+  push:
+    paths:
+      - 'report/build/**'
+      - '.github/workflows/latex.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  
+jobs:
+  build-pdf:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up LaTeX
+        uses: xu-cheng/latex-action@v3
+        with:
+          root_file: report.tex
+          working_directory: report/build
+          latexmk_use_lualatex: true
+          extra_fonts: |
+            /usr/share/fonts
+          args: -pdf -interaction=nonstopmode -file-line-error -output-directory=../output
+
+      - name: Upload PDF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-pdf
+          path: report/output/report.pdf
+          
+      - name: Commit and push PDF
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add report/output/report.pdf
+          git commit -m "Update generated PDF [skip ci]" || echo "No changes to commit"
+          git push
+        env:
+          # Use GitHub token to allow push back to the repo
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
