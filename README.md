@@ -27,8 +27,6 @@ API               http://localhost:7070/
 Prometheus        http://localhost:9090/ 
 Grafana           http://localhost:3000/ 
 Kibana Dashboard  http://localhost:5601/ 
-Logstash          http://localhost:5044/ 
-ElasticSearch     http://localhost:9200/ 
 
 Use the default log-ins for Kibana and Grafana when you run the environments locally:
 Grafana: Admin / Admin
