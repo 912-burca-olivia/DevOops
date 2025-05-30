@@ -12,12 +12,12 @@ You can just see a public timeline without signing in if you rather not give us 
 
 This is a containerised set-up which only requires Docker to run.
 
-To run the App and API with the associated logging and monitoring services, in the head directory run:
-`docker-compose -f docker-compose_local.yml up`
+To run the App and API with the associated logging and monitoring services, in the head directory run:\
+`docker-compose -f docker-compose_local.yml up` \
 This should spin up all containers needed and allow you to access the app via a browser on the local host.
 
-If you would like to run tests run:
-`docker-compose -f docker-compose_test_local.yml up`
+If you would like to run tests run: \
+`docker-compose -f docker-compose_test_local.yml up` \
 This test environment includes, the API simulator tests, the App unit tests and the e2e tests. \
 A summary of passed/failed tests is printed in the terminal.
 
@@ -26,7 +26,7 @@ App               http://localhost:8080/ \
 API               http://localhost:7070/ \
 Prometheus        http://localhost:9090/ \
 Grafana           http://localhost:3000/ \
-Kibana Dashboard  http://localhost:5601/ \
+Kibana Dashboard  http://localhost:5601/ 
 
 Use the default log-ins for Kibana and Grafana when you run the environments locally:\
 Grafana: Admin / Admin \
