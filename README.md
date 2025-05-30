@@ -5,7 +5,7 @@
 
 Authors: Iulia Maria Negrila, Max Bezemer, Olivia Burca, Tore Kjelds, Su Mei Gwen Ho \
 Emails: iune@itu.dk, mbez@itu.dk, olbu@itu.dk, tokj@itu.dk, suho@itu.dk \
-LLM Co-Authors: Gemini, ChatGPT \
+LLM Co-Authors: Gemini, ChatGPT 
 
 Here at MiniTwit, you will find a nifty Tweeter-esque app allowing you to register as a user, follow others, post to your timeline, and snoop on others' timelines. \
 You can just see a public timeline without signing in if you rather not give us your data.
@@ -30,7 +30,7 @@ Kibana Dashboard  http://localhost:5601/ \
 
 Use the default log-ins for Kibana and Grafana when you run the environments locally:\
 Grafana: Admin / Admin \
-Kibana: Admin / Admin \
+Kibana: Admin / Admin 
 
 Deployment is automated using Github Actions. The deployment workflow can be triggered by pushing to Main, or by manually running the Action. 
 
