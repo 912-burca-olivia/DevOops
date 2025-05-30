@@ -1,0 +1,44 @@
+%Describe the biggest issues, how you solved them, and which are major lessons learned.
+%Link back to respective commit messages, issues, tickets, etc. to illustrate these.
+
+\subsection{Evolution \& Refactoring}
+% - Tore's big refactoring that we almost lost!
+% - Long and winding road of ORM. researching properly if we actually want it, be prepared to take another road to save development cost
+% - A better overview of the entire system we wanted to build would have informed some crucial decisions and saved us pain/time/both 
+\begin{itemize} 
+    \item Migrating from SQLite to PostgreSQL introduced several compatibility and configuration challenges, particularly around data types, secure connectivity, and credential management, all of which required adjustments in both infrastructure setup and application code.
+    \item Investigating tasks thoroughly before starting them is crucial. For example, introducing GORM to our application was a long and tedious process which should have been better explored beforehand. In general, a complete overview over the entire system we were building would have informed some crucial decisions and saved us pain/time/both - we now understand why time is well spent on designing a system before building it.
+    \item Refactoring should be broken down into tidbits and tackled in iterations. Also, Github best practices should not be taken for granted as common knowledge. A large refactoring of the code base was committed and pushed one night, and following day a direct merge into the main branch happened accidentally. It was time-consuming and stressful to fix, but we managed!  
+\end{itemize}
+
+\subsection{Operations}
+% - logging
+% - setting up keepalived 
+% - writing useful error messages
+\begin{itemize}
+    \item After migrating to PostgreSQL, our API suddenly stopped connecting to the database. We discovered this was due to too many open connections — each request was opening a new connection. The solution was to refactor the API to use a single persistent database connection instead of reconnecting per request.
+    \item Storage limitations on the remote server highlighted the need to avoid storing data inside containers and to use external volumes for persistence. To solve these issues, we also scaled vertically by increasing the size of both the droplet and the database instance.
+    \item Although the group was quite good at checking the status of our system manually (very not-DevOps like), occasionally the system went down for an extended period of time without anyone noticing. It turned out that we were not monitoring the most useful metrics nor setting alerts for them; at the same time, we found our logging stack challenging to work with. We learned that familiarity with both and quick implementation of missing metrics can go a long way.
+\end{itemize}
+
+\subsection{Maintenance}
+
+\begin{itemize}
+    \item We had to update Dockerfiles and Docker Compose paths when switching to pulling images from Docker Hub. SSH command chaining required extra care due to syntax differences, and .bash profile needed to be sourced manually to ensure environment variables were available during remote setup and deployment.
+    \item We learned that budget constraints can introduce challenges to maintaining the system as demand grows, but it can also scope or simplify decision-making when so many solutions (e.g. CPU type, RAM size, etc) are available. 
+\end{itemize}
+
+\subsection{On Using Large Language Models}
+
+The team is comprised of people with a wide range of experience; some preferred using LLMs better than others. Those who used LLMs mainly used Gemini and ChatGPT to help bridge knowledge gaps in various areas of the course which were new to some if not all of us. This was especially helpful due to the high pace of the course and conflicting schedules, allowing us to maintain momentum and collaborate better. In addition, Gemini was useful as a steady hand during Git merges gone wrong and doomloop rebasing. That being said, we also experienced the negative effect LLMs can have on the development process. In particular, using LLMs heavily to assist in the ORM transition lend to more time spent on debugging and merging code. This process exposed how important it is to understand fundamentals of the code base before relying on LLMs, especially when it comes to testing functions during web development. It is clear sometimes LLMs are not suitable replacements for knowledge sharing within the team. 
+
+%briefly explain which AI-assistants/system(s) you used during the project and reflect how it supported or hindered your process.
+
+\subsection{On Ways of Working}
+%Also reflect and describe what was the "DevOps" style of your work. For example, what did you do differently to previous development projects and how did it work?
+
+Compared to previous projects, our team adopted a clear DevOps style by automating the entire build–test–deploy cycle through CI/CD pipelines, managing infrastructure with code, working with Github Issues and monitoring the system in production. We focused on fast feedback through automated testing and logging, which helped us catch and resolve issues early. This approach made our workflow more efficient, reliable and aligned with real-world DevOps practices. 
+
+Given that most aspects of this project were new to us, we worked fairly smoothly as a team. We shared decision-making well, did our best to split tasks fairly, and managed expectation well according to ability and time available. The main challenge was plugging knowledge gaps in a fast-moving project while juggling other coursework. Time constraints and shifting priorities are the enemy of DevOps - it is ideal that team members are not spread over too many projects, and that there is dedicated space for knowledge sharing and hand-offs. 
+
+%it would have been good to use developer logs! 

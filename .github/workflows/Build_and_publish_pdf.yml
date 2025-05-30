@@ -3,8 +3,8 @@ name: Build LaTeX PDF
 on:
   push:
     paths:
-      - 'report/build/**'
-      - '.github/workflows/latex.yml'
+      - 'report/**'
+      - '.github/workflows/Build_and_publish_pdf.yml'
   workflow_dispatch:
 
 permissions:
@@ -21,7 +21,7 @@ jobs:
       - name: Set up LaTeX
         uses: xu-cheng/latex-action@v3
         with:
-          root_file: report.tex
+          root_file: MSc_group_m.tex
           working_directory: report
           latexmk_use_lualatex: true
           extra_fonts: |
@@ -32,13 +32,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: report-pdf
-          path: report/build/report.pdf
+          path: report/build/MSc_group_m.pdf
           
       - name: Commit and push PDF
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
-          git add report/build/report.pdf
+          git add report/build/MSc_group_m.pdf
           git commit -m "Update generated PDF [skip ci]" || echo "No changes to commit"
           git push
         env:
