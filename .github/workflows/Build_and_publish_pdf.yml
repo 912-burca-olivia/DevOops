@@ -26,7 +26,7 @@ jobs:
           latexmk_use_lualatex: true
           extra_fonts: |
             /usr/share/fonts
-          args: -pdf -interaction=nonstopmode -file-line-error -output-directory=../output
+          args: -pdf -interaction=nonstopmode -file-line-error -output-directory=build
 
       - name: Upload PDF artifact
         uses: actions/upload-artifact@v4
@@ -42,5 +42,4 @@ jobs:
           git commit -m "Update generated PDF [skip ci]" || echo "No changes to commit"
           git push
         env:
-          # Use GitHub token to allow push back to the repo
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
