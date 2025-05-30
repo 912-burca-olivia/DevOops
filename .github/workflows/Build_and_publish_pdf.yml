@@ -22,7 +22,7 @@ jobs:
         uses: xu-cheng/latex-action@v3
         with:
           root_file: report.tex
-          working_directory: report/build
+          working_directory: report
           latexmk_use_lualatex: true
           extra_fonts: |
             /usr/share/fonts
@@ -32,13 +32,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: report-pdf
-          path: report/output/report.pdf
+          path: report/build/report.pdf
           
       - name: Commit and push PDF
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
-          git add report/output/report.pdf
+          git add report/build/report.pdf
           git commit -m "Update generated PDF [skip ci]" || echo "No changes to commit"
           git push
         env:
