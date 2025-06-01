@@ -112,7 +112,7 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           echo -e "Host *\n  StrictHostKeyChecking no\n  UserKnownHostsFile=/dev/null" > ~/.ssh/config
         env:
-          SSH_KEY: ${{ secrets.NEW_SSH_KEY }}
+          SSH_KEY: ${{ secrets.SSH_KEY }}
 
       - name: Copy all deployment files to passive server via scp
         run: |
